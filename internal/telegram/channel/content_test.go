@@ -1,47 +1,9 @@
-package telegram
+package channel
 
 import (
 	"strings"
 	"testing"
 )
-
-func TestExtractImages(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected int
-	}{
-		{
-			name:     "single image",
-			input:    `<a href="https://t.me/test"><img src="https://cdn.example.com/image.jpg"/></a>`,
-			expected: 1,
-		},
-		{
-			name:     "multiple images",
-			input:    `<img src="https://cdn.example.com/1.jpg"/><img src="https://cdn.example.com/2.jpg"/><img src="https://cdn.example.com/3.jpg"/>`,
-			expected: 3,
-		},
-		{
-			name:     "no images",
-			input:    `<div>Some text without images</div>`,
-			expected: 0,
-		},
-		{
-			name:     "image with various attributes",
-			input:    `<img alt="test" src="https://cdn.example.com/test.jpg" class="photo"/>`,
-			expected: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			images := ExtractImages(tt.input)
-			if len(images) != tt.expected {
-				t.Errorf("expected %d images, got %d", tt.expected, len(images))
-			}
-		})
-	}
-}
 
 func TestCleanContent(t *testing.T) {
 	tests := []struct {
@@ -96,7 +58,7 @@ func TestCleanContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanContent(tt.input)
+			result := cleanContent(tt.input)
 
 			for _, str := range tt.contains {
 				if !strings.Contains(result, str) {
@@ -117,18 +79,7 @@ func TestRealWorldExample(t *testing.T) {
 	// Real example from the user's input
 	htmlContent := `<div class="message_media_not_supported"><div class="message_media_not_supported_label">Please open Telegram to view this post</div><a href="https://t.me/mediarzn/7051?single" class="message_media_view_in_telegram">VIEW IN TELEGRAM</a></div> <a href="https://t.me/mediarzn/7051?single"><img src="https://cdn4.telesco.pe/file/tXdj9ramslbrhOJ3NvwMI-vgmi1oNes3n3q3VxaokLgyhDwsZD_TZtRgyoCG0UYBMkPm9nSDTrGtG6Z-V9N3JENvwCcCSBK7lfx7VqghQiNBGEVFAfaOCxSFGQGcwTByptkEubtgedfRZMzRfdbNSxFc3DoDdzs0IqHr7UeQ1Xpmfh_B9N2WeVgrkBOhabY7_XkqUle83sB5enKdKRr1n6yDj0Crkr28ZYrgB-cV78IIKpqk94fUv9lT4VjOcHPwz1LcfpkWWACxRhRK35VmBK8RaN05_AqM2jn4-hD4kh4fECfNznaRkwdZ7W30GrDDD1WlMo9MDcHNdZv3TcD-dg.jpg"/></a><br><a href="https://t.me/mediarzn/7052?single"><img src="https://cdn4.telesco.pe/file/VmKn6JJrEArmRLdLdBFN-wEt0Z36VR5tWU2dkRw_xJPASgZU3XsYwJFtR1QQFT87mI77IXaSLmM8LD1enUgOgW1jGX_SZ5VbRd9_0lKf8Up9Wh0TuDLvOlLUeiTJgO4gvsxiULBo9q4jT9LUq0lDBpln87Qlnk8cxe_dw3fm_jH71v-bZBS0f0zqt2a5Nt7qEdG1AmvhOMsKnvWE7p-Su5BjRaQq6nCd6mMzDChp68uSZkmRMfbtAjUGPO7SD8entT6ynJYClOr2laALIfILaQY32EO-0UZdc7J_FnGrCX0-DL6M96rXg5A76-jh6gkVEKRR7xkETSrp6IJxPwdWrA.jpg"/></a><br><div class="tgme_widget_message_text js-message_text" dir="auto"><b>Бонджорно, читатели&amp;&#33;<br/></b><br/>Это мы сходили на выставку Viva l&amp;#39;Italia в художественный музей.</div>`
 
-	images := ExtractImages(htmlContent)
-	content := CleanContent(htmlContent)
-
-	// Should extract 2 images
-	if len(images) != 2 {
-		t.Errorf("expected 2 images, got %d", len(images))
-	}
-
-	// Images should be proper telesco.pe URLs
-	if len(images) > 0 && !strings.Contains(images[0], "cdn4.telesco.pe") {
-		t.Errorf("expected telesco.pe URL, got %s", images[0])
-	}
+	content := cleanContent(htmlContent)
 
 	// Content should not contain HTML
 	if strings.Contains(content, "<") || strings.Contains(content, ">") {

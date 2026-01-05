@@ -1,8 +1,9 @@
-package telegram
+package channel
 
 import (
 	"fmt"
 
+	"github.com/ksusonic/event-platform/internal/models"
 	"github.com/ksusonic/event-platform/pkg/rss"
 )
 
@@ -24,20 +25,18 @@ func (tc *TelegramChannel) GetName() string {
 	return tc.Name
 }
 
-func (tc *TelegramChannel) GetPosts() ([]Post, error) {
+func (tc *TelegramChannel) GetRawPosts() ([]models.RawPost, error) {
 	channel, err := rss.ParseURL(fmt.Sprintf(rssBridgeURLTemplate, tc.Name))
 	if err != nil {
 		return nil, fmt.Errorf("parse RSS by URL: %w", err)
 	}
 
-	posts := make([]Post, 0, len(channel.Items))
+	posts := make([]models.RawPost, 0, len(channel.Items))
 	for _, item := range channel.Items {
-		posts = append(posts, Post{
+		posts = append(posts, models.RawPost{
 			Link:        item.Link,
-			Content:     CleanContent(item.Description),
-			Images:      ExtractImages(item.Description),
+			Content:     cleanContent(item.Description),
 			PublishedAt: item.ParsedDate,
-			ChannelName: tc.Name,
 		})
 	}
 

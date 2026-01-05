@@ -1,4 +1,4 @@
-package telegram
+package channel
 
 import (
 	"html"
@@ -7,9 +7,6 @@ import (
 )
 
 var (
-	// Extract image src URLs from img tags
-	imgSrcRegex = regexp.MustCompile(`<img[^>]+src="([^"]+)"`)
-
 	// Remove unsupported media message div
 	unsupportedMediaRegex = regexp.MustCompile(`<div class="message_media_not_supported"[^>]*>.*?</div>`)
 
@@ -23,27 +20,13 @@ var (
 	spaceRegex = regexp.MustCompile(`[ \t]+`)
 )
 
-// ExtractImages extracts image URLs from HTML content
-func ExtractImages(htmlContent string) []string {
-	matches := imgSrcRegex.FindAllStringSubmatch(htmlContent, -1)
-	images := make([]string, 0, len(matches))
-
-	for _, match := range matches {
-		if len(match) > 1 {
-			images = append(images, match[1])
-		}
-	}
-
-	return images
-}
-
-// CleanContent cleans up HTML content by:
+// cleanContent cleans up HTML content by:
 // - Removing unsupported media message divs
 // - Removing action links (like "VIEW IN TELEGRAM")
 // - Removing HTML tags
 // - Unescaping HTML entities
 // - Normalizing whitespace
-func CleanContent(htmlContent string) string {
+func cleanContent(htmlContent string) string {
 	// Remove unsupported media messages
 	content := unsupportedMediaRegex.ReplaceAllString(htmlContent, "")
 
