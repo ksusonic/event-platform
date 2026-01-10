@@ -3,7 +3,7 @@ from xml.etree import ElementTree as ET
 from typing import Optional
 
 from ..models.feed import RSSChannel, RSSItem
-from ..utils.html import strip_html
+from ..utils.html import clean_content
 from .fetcher import FeedFetcher
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ class RSSParser:
         return RSSItem(
             title=self._get_text(item_elem, "title", "No Title"),
             link=self._get_text(item_elem, "link", ""),
-            description=strip_html(description),
+            description=clean_content(description),
             pub_date=self._get_text(item_elem, "pubDate"),
             guid=self._get_text(item_elem, "guid"),
             author=self._get_text(item_elem, "author"),
@@ -144,7 +144,7 @@ class RSSParser:
         return RSSItem(
             title=self._get_text(entry, f"{{{ns}}}title", "No Title"),
             link=link,
-            description=strip_html(content),
+            description=clean_content(content),
             pub_date=self._get_text(entry, f"{{{ns}}}published"),
             guid=self._get_text(entry, f"{{{ns}}}id"),
             author=self._get_text(entry, f"{{{ns}}}author/{{{ns}}}name"),
