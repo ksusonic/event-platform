@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional
 from email.utils import parsedate_to_datetime
 import json
 
@@ -30,36 +30,36 @@ class RSSPost:
     @staticmethod
     def _parse_datetime(date_str: str) -> datetime:
         """Parse datetime from string.
-        
+
         Supports:
         - ISO 8601: '2026-01-10T10:00:00Z'
         - RFC 2822: 'Thu, 08 Jan 2026 06:42:01 +0000'
-        
+
         Returns timezone-naive datetime for PostgreSQL TIMESTAMP compatibility.
         """
         dt = None
-        
+
         # Try RFC 2822 format first (common in RSS feeds)
         try:
             dt = parsedate_to_datetime(date_str)
         except (ValueError, TypeError):
             pass
-        
+
         # Try ISO 8601 format
         if dt is None:
             try:
-                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             except (ValueError, TypeError):
                 pass
-        
+
         # If all fail, raise error
         if dt is None:
             raise ValueError(f"Unable to parse datetime from: {date_str}")
-        
+
         # Convert to timezone-naive (PostgreSQL TIMESTAMP expects naive datetimes)
         if dt.tzinfo is not None:
             dt = dt.replace(tzinfo=None)
-        
+
         return dt
 
     def to_dict(self) -> dict:
