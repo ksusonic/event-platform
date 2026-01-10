@@ -8,6 +8,34 @@ import json
 
 
 @dataclass
+class TelegramChannel:
+    """Dataclass representation of a Telegram channel."""
+
+    channel_id: int
+    channel_name: str
+    description: Optional[str] = None
+    url: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    @staticmethod
+    def from_row(row: dict) -> "TelegramChannel":
+        """Create TelegramChannel from database row."""
+        return TelegramChannel(
+            channel_id=row["channel_id"],
+            channel_name=row["channel_name"],
+            description=row.get("description"),
+            url=row.get("url"),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at"),
+        )
+
+
+@dataclass
 class RSSPost:
     """Dataclass representation of an RSS post."""
 

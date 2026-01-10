@@ -25,7 +25,7 @@ def upgrade() -> None:
         "rss_posts",
         sa.Column("link", sa.String(2048), primary_key=True),
         sa.Column("content", sa.Text, nullable=False),
-        sa.Column("pub_date", sa.DateTime, nullable=True),
+        sa.Column("pub_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("media", sa.Text, nullable=True),
         sa.Column("is_processed", sa.Boolean, nullable=False, server_default="false"),
         sa.Column("is_event", sa.Boolean, nullable=True),

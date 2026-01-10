@@ -26,7 +26,6 @@ def upgrade() -> None:
         sa.Column("channel_id", sa.BigInteger, primary_key=True),
         sa.Column("channel_name", sa.String(255), nullable=False, unique=True),
         sa.Column("description", sa.Text, nullable=True),
-        sa.Column("url", sa.String(512), nullable=True),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
         sa.Column(
             "updated_at",
