@@ -32,12 +32,15 @@ def upgrade() -> None:
             "updated_at",
             sa.DateTime,
             server_default=sa.func.now(),
-            onupdate=sa.func.now(),
             nullable=False,
         ),
+    )
+    op.create_index(
+        "idx_telegram_channels_channel_name", "telegram_channels", ["channel_name"], unique=True
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index("idx_telegram_channels_channel_name", table_name="telegram_channels")
     op.drop_table("telegram_channels")
