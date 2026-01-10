@@ -9,13 +9,9 @@ import json
 class RSSItem:
     """Represents a single RSS feed item."""
 
-    title: str
     link: str
     description: str
     pub_date: Optional[str] = None
-    guid: Optional[str] = None
-    author: Optional[str] = None
-    category: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

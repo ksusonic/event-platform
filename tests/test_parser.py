@@ -1,6 +1,5 @@
 """Tests for RSS parser."""
 
-import pytest
 from rss_parser import RSSParser, RSSChannel, RSSItem
 
 
@@ -27,7 +26,6 @@ def test_parse_rss_content():
     assert feed.title == "Test Feed"
     assert feed.link == "https://example.com"
     assert len(feed.items) == 1
-    assert feed.items[0].title == "Test Item"
 
 
 def test_parse_atom_content():
@@ -51,15 +49,13 @@ def test_parse_atom_content():
 
     assert feed.title == "Test Atom Feed"
     assert len(feed.items) == 1
-    assert feed.items[0].title == "Test Entry"
 
 
 def test_rss_item_to_dict():
     """Test converting RSSItem to dictionary."""
-    item = RSSItem(title="Test", link="https://example.com", description="Test description")
+    item = RSSItem(link="https://example.com", description="Test description")
 
     item_dict = item.to_dict()
-    assert item_dict["title"] == "Test"
     assert item_dict["link"] == "https://example.com"
 
 
@@ -96,10 +92,8 @@ def test_parse_centralbank_russia_fixture():
 
     # Verify first item
     first_item = feed.items[0]
-    assert first_item.title == "👀 Банк России будет учитывать два новых показателя..."
     assert first_item.link == "https://t.me/centralbank_russia/3235"
     assert first_item.pub_date == "Fri, 09 Jan 2026 10:15:06 +0000"
-    assert first_item.guid == "https://t.me/centralbank_russia/3235"
 
     # Verify that descriptions contain HTML content
     assert first_item.description is not None
@@ -108,11 +102,8 @@ def test_parse_centralbank_russia_fixture():
 
     # Verify another item with different content
     second_item = feed.items[1]
-    assert second_item.title == "🎧 Аудиоподкасты об экономике для студентов и не..."
     assert second_item.link == "https://t.me/centralbank_russia/3234"
 
     # Test that all items have required fields
     for item in feed.items:
-        assert item.title is not None
         assert item.link is not None
-        assert item.guid is not None

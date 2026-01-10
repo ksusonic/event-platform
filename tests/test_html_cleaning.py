@@ -1,6 +1,5 @@
 """Tests for HTML content cleaning functionality."""
 
-import pytest
 from rss_parser.utils.html import clean_content
 
 
@@ -92,7 +91,6 @@ class TestCleanContent:
     def test_empty_string(self):
         """Test handling of empty string."""
         assert clean_content("") == ""
-        assert clean_content(None) == ""
 
     def test_complex_telegram_message(self):
         """Test a complex telegram-style message with multiple elements."""

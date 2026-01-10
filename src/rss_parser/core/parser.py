@@ -121,13 +121,9 @@ class RSSParser:
             description = content_encoded
 
         return RSSItem(
-            title=self._get_text(item_elem, "title", "No Title"),
             link=self._get_text(item_elem, "link", ""),
             description=clean_content(description),
             pub_date=self._get_text(item_elem, "pubDate"),
-            guid=self._get_text(item_elem, "guid"),
-            author=self._get_text(item_elem, "author"),
-            category=self._get_text(item_elem, "category"),
         )
 
     def _parse_atom_entry(self, entry: ET.Element) -> RSSItem:
@@ -142,12 +138,9 @@ class RSSParser:
             content = self._get_text(entry, f"{{{ns}}}summary", "")
 
         return RSSItem(
-            title=self._get_text(entry, f"{{{ns}}}title", "No Title"),
             link=link,
             description=clean_content(content),
             pub_date=self._get_text(entry, f"{{{ns}}}published"),
-            guid=self._get_text(entry, f"{{{ns}}}id"),
-            author=self._get_text(entry, f"{{{ns}}}author/{{{ns}}}name"),
         )
 
     @staticmethod

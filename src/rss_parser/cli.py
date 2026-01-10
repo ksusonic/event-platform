@@ -24,14 +24,10 @@ def main():
         print(f"✓ Items: {len(feed.items)}")
         print(f"✓ Link: {feed.link}\n")
 
-        for i, item in enumerate(feed.items[:5], 1):
-            print(f"Item {i}: {item.title}")
+        for i, item in enumerate(feed.items[:10], 1):
             print(f"  Date: {item.pub_date}")
             print(f"  Link: {item.link}")
-            desc = (
-                item.description[:100] + "..." if len(item.description) > 100 else item.description
-            )
-            print(f"  Desc: {desc}\n")
+            print(f"  Desc: {item.description}\n")
 
     except Exception as e:
         print(f"Error: {e}")
