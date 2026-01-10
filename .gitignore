@@ -15,4 +15,4 @@ htmlcov/
 .idea/
 *.swp
 *.swo
-
+.vscode
