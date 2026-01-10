@@ -51,6 +51,53 @@ def test_parse_atom_content():
     assert len(feed.items) == 1
 
 
+def test_parse_media_urls():
+    """Test parsing media URLs from RSS feed with media:content and HTML images."""
+    rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+        <channel>
+            <title>Test Feed with Media</title>
+            <link>https://example.com</link>
+            <description>Test Description</description>
+            <item>
+                <title>Test Item with Media</title>
+                <link>https://example.com/item1</link>
+                <description><![CDATA[
+                    <img src="https://cdn4.telesco.pe/file/test-image1.jpg"/>
+                    <video poster="https://cdn4.telesco.pe/file/test-video-poster.jpg">
+                        <source src="https://cdn4.telesco.pe/file/test-video.mp4"/>
+                    </video>
+                    <img src="https://cdn4.telesco.pe/file/test-image2.jpg"/>
+                ]]></description>
+                <pubDate>Mon, 10 Jan 2026 12:00:00 GMT</pubDate>
+                <media:content url="https://cdn4.telesco.pe/file/media-content.jpg" type="image/jpeg"/>
+            </item>
+        </channel>
+    </rss>"""
+
+    parser = RSSParser()
+    feed = parser.parse_content(rss_xml)
+
+    assert len(feed.items) == 1
+    item = feed.items[0]
+
+    # Check that media URLs are extracted
+    assert len(item.media_urls) > 0
+
+    # Check that media:content URL is included
+    assert "https://cdn4.telesco.pe/file/media-content.jpg" in item.media_urls
+
+    # Check that img src URLs are included
+    assert "https://cdn4.telesco.pe/file/test-image1.jpg" in item.media_urls
+    assert "https://cdn4.telesco.pe/file/test-image2.jpg" in item.media_urls
+
+    # Check that video poster URL is included
+    assert "https://cdn4.telesco.pe/file/test-video-poster.jpg" in item.media_urls
+
+    # Total should be 4 unique URLs
+    assert len(item.media_urls) == 4
+
+
 def test_rss_item_to_dict():
     """Test converting RSSItem to dictionary."""
     item = RSSItem(link="https://example.com", description="Test description")
@@ -107,3 +154,64 @@ def test_parse_centralbank_russia_fixture():
     # Test that all items have required fields
     for item in feed.items:
         assert item.link is not None
+
+
+def test_centralbank_media_extraction():
+    """Test that media URLs are correctly extracted from the Central Bank RSS feed fixture."""
+    import os
+
+    # Load the fixture file
+    fixture_path = os.path.join(os.path.dirname(__file__), "fixtures", "centralbank_russia.xml")
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        rss_content = f.read()
+
+    # Parse the RSS feed
+    parser = RSSParser()
+    feed = parser.parse_content(rss_content)
+
+    # Test first item - has image in description
+    first_item = feed.items[0]
+    assert first_item.media_urls is not None
+    assert len(first_item.media_urls) > 0
+    # Check that the image URL from the HTML is extracted
+    assert any(
+        "cdn4.telesco.pe/file/EIf7N3nLRg0uxcIl_qbdqYxQ3s7uIuoHn04F8BsqYi7GrXywA" in url
+        for url in first_item.media_urls
+    )
+
+    # Test second item - also has image in description
+    second_item = feed.items[1]
+    assert len(second_item.media_urls) > 0
+    assert any(
+        "cdn4.telesco.pe/file/tmA8JTxApF_SUGCME82uIdOKk8UNlv2YUPe0iyl2ZFfuXOJ" in url
+        for url in second_item.media_urls
+    )
+
+    # Test third item - has video poster and media:content tag
+    third_item = feed.items[2]
+    assert len(third_item.media_urls) > 0
+    # Should have video poster URL
+    assert any(
+        "cdn4.telesco.pe/file/MOMtF_YYEpnIGYrJSHWTdRtKuotxc" in url for url in third_item.media_urls
+    )
+    # Media:content URL should also be present (it's the same as poster in this case)
+
+    # Test fourth item - has video poster and media:content tag
+    fourth_item = feed.items[3]
+    assert len(fourth_item.media_urls) > 0
+    # Should have both video poster and media:content
+    assert any(
+        "cdn4.telesco.pe/file/QREqxpPjX_snuYmn5RTCM" in url for url in fourth_item.media_urls
+    )
+
+    # Test that media URLs are being extracted across all items with media
+    items_with_media = [item for item in feed.items if len(item.media_urls) > 0]
+    # Most items in this feed should have media
+    assert len(items_with_media) > 5
+
+    # Verify all media URLs are valid (start with https://)
+    for item in feed.items:
+        for media_url in item.media_urls:
+            assert media_url.startswith("https://"), f"Invalid media URL: {media_url}"
+            # Most should be from cdn4.telesco.pe
+            assert "telesco.pe" in media_url or "telegram.org" in media_url

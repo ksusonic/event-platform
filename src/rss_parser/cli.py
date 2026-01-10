@@ -27,7 +27,14 @@ def main():
         for i, item in enumerate(feed.items[:10], 1):
             print(f"  Date: {item.pub_date}")
             print(f"  Link: {item.link}")
-            print(f"  Desc: {item.description}\n")
+            print(f"  Desc: {item.description}")
+            if item.media_urls:
+                print(f"  Media: {len(item.media_urls)} URL(s)")
+                for media_url in item.media_urls[:3]:  # Show first 3 media URLs
+                    print(f"    - {media_url}")
+                if len(item.media_urls) > 3:
+                    print(f"    ... and {len(item.media_urls) - 3} more")
+            print()
 
     except Exception as e:
         print(f"Error: {e}")

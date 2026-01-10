@@ -114,3 +114,46 @@ def strip_html(text: str) -> str:
         return ""
     clean = re.compile("<.*?>")
     return re.sub(clean, "", text).strip()
+
+
+def extract_media_urls(html_content: str) -> list[str]:
+    """
+    Extract media URLs (images and video posters) from HTML content.
+
+    Extracts:
+    - Image src from <img> tags
+    - Video poster URLs from <video> tags
+
+    Args:
+        html_content: Raw HTML content string
+
+    Returns:
+        List of media URLs found in the content
+    """
+    if not html_content:
+        return []
+
+    media_urls = []
+
+    # Unescape HTML entities first
+    content = html.unescape(html_content)
+
+    # Extract image URLs from <img src="...">
+    img_pattern = re.compile(r'<img[^>]+src="([^"]+)"', re.IGNORECASE)
+    img_matches = img_pattern.findall(content)
+    media_urls.extend(img_matches)
+
+    # Extract video poster URLs from <video poster="...">
+    video_pattern = re.compile(r'<video[^>]+poster="([^"]+)"', re.IGNORECASE)
+    video_matches = video_pattern.findall(content)
+    media_urls.extend(video_matches)
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_urls = []
+    for url in media_urls:
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+
+    return unique_urls

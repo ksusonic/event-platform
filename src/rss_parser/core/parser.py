@@ -3,7 +3,7 @@ from xml.etree import ElementTree as ET
 from typing import Optional
 
 from ..models.feed import RSSChannel, RSSItem
-from ..utils.html import clean_content
+from ..utils.html import clean_content, extract_media_urls
 from .fetcher import FeedFetcher
 
 logger = logging.getLogger(__name__)
@@ -120,10 +120,25 @@ class RSSParser:
         if content_encoded:
             description = content_encoded
 
+        # Extract media URLs
+        media_urls = []
+
+        # 1. Extract from media:content tags (namespace support)
+        media_ns = self.NAMESPACES.get("media", "")
+        if media_ns:
+            for media_elem in item_elem.findall(f"{{{media_ns}}}content"):
+                media_url = media_elem.get("url", "")
+                if media_url:
+                    media_urls.append(media_url)
+
+        # 2. Extract from HTML description (img src and video poster)
+        media_urls.extend(extract_media_urls(description))
+
         return RSSItem(
             link=self._get_text(item_elem, "link", ""),
             description=clean_content(description),
             pub_date=self._get_text(item_elem, "pubDate"),
+            media_urls=media_urls,
         )
 
     def _parse_atom_entry(self, entry: ET.Element) -> RSSItem:
@@ -137,10 +152,14 @@ class RSSParser:
         if not content:
             content = self._get_text(entry, f"{{{ns}}}summary", "")
 
+        # Extract media URLs from content
+        media_urls = extract_media_urls(content)
+
         return RSSItem(
             link=link,
             description=clean_content(content),
             pub_date=self._get_text(entry, f"{{{ns}}}published"),
+            media_urls=media_urls,
         )
 
     @staticmethod

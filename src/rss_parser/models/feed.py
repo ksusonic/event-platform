@@ -12,6 +12,11 @@ class RSSItem:
     link: str
     description: str
     pub_date: Optional[str] = None
+    media_urls: List[str] = None
+
+    def __post_init__(self):
+        if self.media_urls is None:
+            self.media_urls = []
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
