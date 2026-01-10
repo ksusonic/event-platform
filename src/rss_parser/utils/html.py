@@ -37,6 +37,12 @@ HTML_TAG_REGEX = re.compile(r"<[^>]+>")
 # Normalize multiple spaces (but not newlines)
 SPACE_REGEX = re.compile(r"[ \t]+")
 
+# Normalize multiple newlines (3+ newlines become 2)
+NEWLINE_REGEX = re.compile(r"\n{3,}")
+
+# Remove spaces around newlines
+NEWLINE_SPACE_REGEX = re.compile(r"[ \t]*\n[ \t]*")
+
 
 def clean_content(html_content: str) -> str:
     """
@@ -45,7 +51,7 @@ def clean_content(html_content: str) -> str:
     - Removing unsupported media message divs
     - Removing action links (like "VIEW IN TELEGRAM")
     - Removing HTML tags
-    - Normalizing whitespace
+    - Normalizing whitespace and newlines
 
     Args:
         html_content: Raw HTML content string
@@ -72,6 +78,7 @@ def clean_content(html_content: str) -> str:
     # Replace line breaks with newlines
     content = content.replace("<br/>", "\n")
     content = content.replace("<br>", "\n")
+    content = content.replace("<br />", "\n")
 
     # Remove img tags (they've been extracted)
     content = IMG_TAG_REGEX.sub("", content)
@@ -83,14 +90,25 @@ def clean_content(html_content: str) -> str:
     # Remove emoji tags and keep the emoji
     content = EMOJI_REGEX.sub(r"\1", content)
 
-    # Remove all remaining HTML tags
-    content = HTML_TAG_REGEX.sub("", content)
+    # Remove all remaining HTML tags (replace with space to avoid word concatenation)
+    content = HTML_TAG_REGEX.sub(" ", content)
 
     # Unescape HTML entities again (for any remaining entities in text content)
     content = html.unescape(content)
 
     # Normalize spaces and tabs (but preserve newlines)
     content = SPACE_REGEX.sub(" ", content)
+
+    # Clean up spaces around newlines
+    content = NEWLINE_SPACE_REGEX.sub("\n", content)
+
+    # Normalize multiple consecutive newlines (3+ → 2)
+    content = NEWLINE_REGEX.sub("\n\n", content)
+
+    # Remove leading/trailing whitespace from each line
+    lines = content.split("\n")
+    lines = [line.strip() for line in lines]
+    content = "\n".join(lines)
 
     # Trim leading/trailing whitespace
     content = content.strip()

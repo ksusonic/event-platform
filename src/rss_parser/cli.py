@@ -39,10 +39,17 @@ async def async_main():
         saved_count = 0
         skipped_count = 0
         error_count = 0
+        empty_count = 0
 
         # Save items to database
         for i, item in enumerate(feed.items, 1):
             try:
+                # Skip if content is empty
+                if not item.description or not item.description.strip():
+                    logger.debug(f"Skipping item with empty content: {item.link}")
+                    empty_count += 1
+                    continue
+
                 # Check if item already exists
                 existing = await RSSPostRepository.get_by_link(item.link)
                 if existing:
@@ -71,6 +78,8 @@ async def async_main():
         # Summary
         print(f"\n✓ Saved: {saved_count}")
         print(f"✓ Skipped (already exists): {skipped_count}")
+        if empty_count > 0:
+            print(f"✓ Skipped (empty content): {empty_count}")
         if error_count > 0:
             print(f"✗ Errors: {error_count}")
 

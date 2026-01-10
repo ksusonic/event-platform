@@ -1,7 +1,3 @@
-"""Pytest configuration and fixtures."""
-
-import pytest
-import pytest_asyncio
 import os
 
 # Use the main database for tests
