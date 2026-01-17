@@ -455,11 +455,13 @@ class OpenAIRequestLogRepository:
         Returns:
             Number of deleted rows
         """
-        query = """
+        query = (
+            """
             DELETE FROM openai_request_logs 
             WHERE created_at < NOW() - INTERVAL '%s days'
-        """ % days
+        """
+            % days
+        )
         result = await db.execute(query)
         # Parse result like "DELETE 5" to get count
         return int(result.split()[-1]) if result else 0
-

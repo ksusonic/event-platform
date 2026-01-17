@@ -28,13 +28,13 @@ async def test_logging():
             request_data={
                 "messages": [
                     {"role": "system", "content": "Test system prompt"},
-                    {"role": "user", "content": "Test user prompt"}
+                    {"role": "user", "content": "Test user prompt"},
                 ],
                 "max_tokens": 500,
-                "temperature": 0.3
+                "temperature": 0.3,
             },
             status="pending",
-            post_link="https://example.com/test-post"
+            post_link="https://example.com/test-post",
         )
 
         log_id = await OpenAIRequestLogRepository.create(log)
@@ -56,10 +56,10 @@ async def test_logging():
             status_code=200,
             response_data={
                 "choices": [{"message": {"content": '{"is_event": true}'}}],
-                "usage": {"total_tokens": 150, "prompt_tokens": 100, "completion_tokens": 50}
+                "usage": {"total_tokens": 150, "prompt_tokens": 100, "completion_tokens": 50},
             },
             tokens_used=150,
-            cost_estimate=Decimal("0.000023")
+            cost_estimate=Decimal("0.000023"),
         )
         print("✓ Updated status to completed\n")
 
@@ -89,6 +89,7 @@ async def test_logging():
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

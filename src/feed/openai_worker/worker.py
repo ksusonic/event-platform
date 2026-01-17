@@ -18,9 +18,7 @@ class OpenAIWorker:
         self.processor = BatchProcessor()
 
     async def process_unprocessed_posts(
-        self,
-        batch_size: Optional[int] = None,
-        wait_for_completion: bool = True
+        self, batch_size: Optional[int] = None, wait_for_completion: bool = True
     ) -> dict:
         """Get all unprocessed posts and submit them for classification.
 
@@ -41,11 +39,7 @@ class OpenAIWorker:
 
         if not posts:
             print("No unprocessed posts found.")
-            return {
-                "status": "no_posts",
-                "posts_count": 0,
-                "batch_id": None
-            }
+            return {"status": "no_posts", "posts_count": 0, "batch_id": None}
 
         print(f"Found {len(posts)} unprocessed posts")
         print("Submitting batch to OpenAI...")
@@ -57,7 +51,7 @@ class OpenAIWorker:
             "status": "submitted",
             "posts_count": len(posts),
             "batch_id": batch_id,
-            "submitted_at": datetime.now().isoformat()
+            "submitted_at": datetime.now().isoformat(),
         }
 
         if wait_for_completion:
@@ -140,10 +134,10 @@ class OpenAIWorker:
             print("=" * 80)
             print(f"Status: {result['status']}")
             print(f"Posts processed: {result['posts_count']}")
-            if result.get('batch_id'):
+            if result.get("batch_id"):
                 print(f"Batch ID: {result['batch_id']}")
-            if result.get('stats'):
-                stats = result['stats']
+            if result.get("stats"):
+                stats = result["stats"]
                 print("\nResults:")
                 print(f"  Total responses: {stats['total']}")
                 print(f"  Successful: {stats['success']}")

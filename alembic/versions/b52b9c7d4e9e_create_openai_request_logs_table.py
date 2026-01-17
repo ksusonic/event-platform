@@ -5,6 +5,7 @@ Revises: fe1255139807
 Create Date: 2026-01-17 18:56:06.252086
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b52b9c7d4e9e'
-down_revision: Union[str, Sequence[str], None] = 'fe1255139807'
+revision: str = "b52b9c7d4e9e"
+down_revision: Union[str, Sequence[str], None] = "fe1255139807"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -49,7 +50,9 @@ def upgrade() -> None:
     op.create_index("idx_openai_logs_batch_id", "openai_request_logs", ["batch_id"], unique=False)
     op.create_index("idx_openai_logs_custom_id", "openai_request_logs", ["custom_id"], unique=False)
     op.create_index("idx_openai_logs_status", "openai_request_logs", ["status"], unique=False)
-    op.create_index("idx_openai_logs_created_at", "openai_request_logs", ["created_at"], unique=False)
+    op.create_index(
+        "idx_openai_logs_created_at", "openai_request_logs", ["created_at"], unique=False
+    )
     op.create_index("idx_openai_logs_post_link", "openai_request_logs", ["post_link"], unique=False)
 
 

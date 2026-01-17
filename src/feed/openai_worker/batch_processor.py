@@ -63,7 +63,9 @@ Is this an event? Provide your analysis in JSON format."""
         self.batch_dir = Path(__file__).parent.parent.parent.parent / "batch_data"
         self.batch_dir.mkdir(exist_ok=True)
 
-    async def create_batch_request_file(self, posts: List[RSSPost], batch_id: Optional[str] = None) -> Path:
+    async def create_batch_request_file(
+        self, posts: List[RSSPost], batch_id: Optional[str] = None
+    ) -> Path:
         """Create a JSONL file with batch requests and log them to database.
 
         Args:
@@ -84,7 +86,7 @@ Is this an event? Provide your analysis in JSON format."""
                 user_prompt = self.USER_PROMPT_TEMPLATE.format(
                     link=post.link,
                     content=content,
-                    pub_date=post.pub_date.isoformat() if post.pub_date else "Unknown"
+                    pub_date=post.pub_date.isoformat() if post.pub_date else "Unknown",
                 )
 
                 # Create a unique custom_id using hash of the link
@@ -95,18 +97,18 @@ Is this an event? Provide your analysis in JSON format."""
                     "model": openai_settings.model,
                     "messages": [
                         {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     "max_tokens": openai_settings.max_tokens,
                     "temperature": openai_settings.temperature,
-                    "response_format": {"type": "json_object"}
+                    "response_format": {"type": "json_object"},
                 }
 
                 request = {
                     "custom_id": custom_id,
                     "method": "POST",
                     "url": "/v1/chat/completions",
-                    "body": request_body
+                    "body": request_body,
                 }
                 f.write(json.dumps(request) + "\n")
 
@@ -146,10 +148,7 @@ Is this an event? Provide your analysis in JSON format."""
 
         # Upload file to OpenAI
         with open(request_file_path, "rb") as f:
-            batch_input_file = self.client.files.create(
-                file=f,
-                purpose="batch"
-            )
+            batch_input_file = self.client.files.create(file=f, purpose="batch")
 
         # Create batch
         batch = self.client.batches.create(
@@ -158,8 +157,8 @@ Is this an event? Provide your analysis in JSON format."""
             completion_window="24h",
             metadata={
                 "description": f"Event classification for {len(posts)} posts",
-                "timestamp": datetime.now().isoformat()
-            }
+                "timestamp": datetime.now().isoformat(),
+            },
         )
 
         # Update all pending logs with the batch_id
@@ -173,6 +172,7 @@ Is this an event? Provide your analysis in JSON format."""
                     # Update with batch_id
                     query = "UPDATE openai_request_logs SET batch_id = $1 WHERE id = $2"
                     from ..db.session import db
+
                     await db.execute(query, batch.id, log.id)
                     break
 
@@ -205,8 +205,8 @@ Is this an event? Provide your analysis in JSON format."""
             "request_counts": {
                 "total": batch.request_counts.total,
                 "completed": batch.request_counts.completed,
-                "failed": batch.request_counts.failed
-            }
+                "failed": batch.request_counts.failed,
+            },
         }
 
     def download_results(self, batch_id: str) -> Optional[Path]:
@@ -250,12 +250,7 @@ Is this an event? Provide your analysis in JSON format."""
         Returns:
             Dictionary with processing statistics
         """
-        stats = {
-            "total": 0,
-            "success": 0,
-            "failed": 0,
-            "events_found": 0
-        }
+        stats = {"total": 0, "success": 0, "failed": 0, "events_found": 0}
 
         # Create a mapping of posts by their link hash for quick lookup
         posts_by_hash = {}
@@ -298,7 +293,9 @@ Is this an event? Provide your analysis in JSON format."""
                                 status="failed",
                                 status_code=status_code,
                                 response_data=response,
-                                error_message=response.get("body", {}).get("error", {}).get("message", "Unknown error")
+                                error_message=response.get("body", {})
+                                .get("error", {})
+                                .get("message", "Unknown error"),
                             )
                         continue
 
@@ -321,7 +318,9 @@ Is this an event? Provide your analysis in JSON format."""
                     matching_post = posts_by_hash.get(link_hash)
 
                     if not matching_post:
-                        print(f"Could not find matching post for hash {link_hash} (custom_id: {custom_id})")
+                        print(
+                            f"Could not find matching post for hash {link_hash} (custom_id: {custom_id})"
+                        )
                         stats["failed"] += 1
 
                         # Still log the response
@@ -334,7 +333,7 @@ Is this an event? Provide your analysis in JSON format."""
                                 response_data=response["body"],
                                 tokens_used=tokens_used,
                                 cost_estimate=cost_estimate,
-                                error_message="Post not found in current batch"
+                                error_message="Post not found in current batch",
                             )
                         continue
 
@@ -345,13 +344,13 @@ Is this an event? Provide your analysis in JSON format."""
                         "reasoning": classification.get("reasoning", ""),
                         "event_details": classification.get("event_details", {}),
                         "model": openai_settings.model,
-                        "classified_at": datetime.now().isoformat()
+                        "classified_at": datetime.now().isoformat(),
                     }
 
                     await RSSPostRepository.mark_as_processed(
                         link=matching_post.link,
                         is_event=is_event,
-                        classification_data=classification_data
+                        classification_data=classification_data,
                     )
 
                     # Log the successful response
@@ -384,9 +383,7 @@ Is this an event? Provide your analysis in JSON format."""
                             log = await OpenAIRequestLogRepository.get_by_custom_id(custom_id)
                             if log:
                                 await OpenAIRequestLogRepository.update_status(
-                                    log_id=log.id,
-                                    status="failed",
-                                    error_message=str(e)
+                                    log_id=log.id, status="failed", error_message=str(e)
                                 )
                     except Exception:
                         pass
@@ -394,7 +391,9 @@ Is this an event? Provide your analysis in JSON format."""
 
         return stats
 
-    async def wait_for_completion(self, batch_id: str, poll_interval: int = 30, max_wait: int = 3600) -> bool:
+    async def wait_for_completion(
+        self, batch_id: str, poll_interval: int = 30, max_wait: int = 3600
+    ) -> bool:
         """Wait for batch to complete.
 
         Args:
@@ -412,7 +411,9 @@ Is this an event? Provide your analysis in JSON format."""
             status = status_info["status"]
 
             print(f"Batch {batch_id} status: {status}")
-            print(f"  Completed: {status_info['request_counts']['completed']}/{status_info['request_counts']['total']}")
+            print(
+                f"  Completed: {status_info['request_counts']['completed']}/{status_info['request_counts']['total']}"
+            )
 
             if status == "completed":
                 print("✓ Batch completed successfully")
