@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 import json
 from .session import db
-from .models import RSSPost, TelegramChannel, OpenAIRequestLog
+from .models import RSSPost, TelegramChannel, OpenAIRequestLog, Event
 
 
 class TelegramChannelRepository:
@@ -465,3 +465,236 @@ class OpenAIRequestLogRepository:
         result = await db.execute(query)
         # Parse result like "DELETE 5" to get count
         return int(result.split()[-1]) if result else 0
+
+
+class EventRepository:
+    """Repository for event operations."""
+
+    @staticmethod
+    async def create(event: Event) -> int:
+        """Create a new event.
+
+        Args:
+            event: Event dataclass instance
+
+        Returns:
+            ID of created event
+        """
+        query = """
+            INSERT INTO events (
+                post_link, title, summary, event_date, event_date_is_approximate,
+                location, event_type, confidence, additional_data
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        """
+        event_id = await db.fetchval(
+            query,
+            event.post_link,
+            event.title,
+            event.summary,
+            event.event_date,
+            event.event_date_is_approximate,
+            event.location,
+            event.event_type,
+            event.confidence,
+            json.dumps(event.additional_data) if event.additional_data else None,
+        )
+        return event_id
+
+    @staticmethod
+    async def get_by_id(event_id: int) -> Optional[Event]:
+        """Get event by ID."""
+        query = "SELECT * FROM events WHERE id = $1"
+        row = await db.fetchrow(query, event_id)
+        return Event.from_row(row) if row else None
+
+    @staticmethod
+    async def get_by_post_link(post_link: str) -> Optional[Event]:
+        """Get event by post link."""
+        query = "SELECT * FROM events WHERE post_link = $1"
+        row = await db.fetchrow(query, post_link)
+        return Event.from_row(row) if row else None
+
+    @staticmethod
+    async def get_all(
+        limit: int = 100, offset: int = 0, order_by: str = "event_date"
+    ) -> List[Event]:
+        """Get all events with pagination.
+
+        Args:
+            limit: Maximum number of events to return
+            offset: Number of events to skip
+            order_by: Field to order by (event_date, created_at, confidence)
+
+        Returns:
+            List of Event instances
+        """
+        # Validate order_by to prevent SQL injection
+        valid_order_fields = ["event_date", "created_at", "confidence", "id"]
+        if order_by not in valid_order_fields:
+            order_by = "event_date"
+
+        query = f"""
+            SELECT * FROM events 
+            ORDER BY {order_by} DESC NULLS LAST
+            LIMIT $1 OFFSET $2
+        """
+        rows = await db.fetch(query, limit, offset)
+        return [Event.from_row(row) for row in rows]
+
+    @staticmethod
+    async def get_upcoming_events(limit: int = 50) -> List[Event]:
+        """Get upcoming events (events with future dates).
+
+        Args:
+            limit: Maximum number of events to return
+
+        Returns:
+            List of Event instances
+        """
+        query = """
+            SELECT * FROM events 
+            WHERE event_date >= CURRENT_TIMESTAMP
+            ORDER BY event_date ASC
+            LIMIT $1
+        """
+        rows = await db.fetch(query, limit)
+        return [Event.from_row(row) for row in rows]
+
+    @staticmethod
+    async def get_by_type(event_type: str, limit: int = 100) -> List[Event]:
+        """Get events by type.
+
+        Args:
+            event_type: Type of event (e.g., 'conference', 'meetup')
+            limit: Maximum number of events to return
+
+        Returns:
+            List of Event instances
+        """
+        query = """
+            SELECT * FROM events 
+            WHERE event_type = $1
+            ORDER BY event_date DESC NULLS LAST
+            LIMIT $2
+        """
+        rows = await db.fetch(query, event_type, limit)
+        return [Event.from_row(row) for row in rows]
+
+    @staticmethod
+    async def update(event: Event) -> None:
+        """Update an event.
+
+        Args:
+            event: Event dataclass instance with id set
+        """
+        if not event.id:
+            raise ValueError("Event ID must be set to update")
+
+        query = """
+            UPDATE events 
+            SET post_link = $2,
+                title = $3,
+                summary = $4,
+                event_date = $5,
+                event_date_is_approximate = $6,
+                location = $7,
+                event_type = $8,
+                confidence = $9,
+                additional_data = $10,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+        """
+        await db.execute(
+            query,
+            event.id,
+            event.post_link,
+            event.title,
+            event.summary,
+            event.event_date,
+            event.event_date_is_approximate,
+            event.location,
+            event.event_type,
+            event.confidence,
+            json.dumps(event.additional_data) if event.additional_data else None,
+        )
+
+    @staticmethod
+    async def delete(event_id: int) -> None:
+        """Delete an event.
+
+        Args:
+            event_id: ID of the event to delete
+        """
+        query = "DELETE FROM events WHERE id = $1"
+        await db.execute(query, event_id)
+
+    @staticmethod
+    async def count() -> int:
+        """Get total count of events."""
+        query = "SELECT COUNT(*) FROM events"
+        return await db.fetchval(query)
+
+    @staticmethod
+    async def search(
+        query_text: Optional[str] = None,
+        event_type: Optional[str] = None,
+        location: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        limit: int = 100,
+    ) -> List[Event]:
+        """Search events with multiple filters.
+
+        Args:
+            query_text: Text to search in title and summary
+            event_type: Filter by event type
+            location: Filter by location
+            date_from: Filter events from this date
+            date_to: Filter events until this date
+            limit: Maximum number of results
+
+        Returns:
+            List of Event instances
+        """
+        conditions = []
+        params = []
+        param_count = 0
+
+        if query_text:
+            param_count += 1
+            conditions.append(f"(title ILIKE ${param_count} OR summary ILIKE ${param_count})")
+            params.append(f"%{query_text}%")
+
+        if event_type:
+            param_count += 1
+            conditions.append(f"event_type = ${param_count}")
+            params.append(event_type)
+
+        if location:
+            param_count += 1
+            conditions.append(f"location ILIKE ${param_count}")
+            params.append(f"%{location}%")
+
+        if date_from:
+            param_count += 1
+            conditions.append(f"event_date >= ${param_count}")
+            params.append(date_from)
+
+        if date_to:
+            param_count += 1
+            conditions.append(f"event_date <= ${param_count}")
+            params.append(date_to)
+
+        where_clause = " AND ".join(conditions) if conditions else "TRUE"
+        param_count += 1
+        params.append(limit)
+
+        query = f"""
+            SELECT * FROM events 
+            WHERE {where_clause}
+            ORDER BY event_date DESC NULLS LAST
+            LIMIT ${param_count}
+        """
+        rows = await db.fetch(query, *params)
+        return [Event.from_row(row) for row in rows]

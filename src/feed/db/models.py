@@ -182,3 +182,52 @@ class OpenAIRequestLog:
             updated_at=row.get("updated_at"),
             completed_at=row.get("completed_at"),
         )
+
+
+@dataclass
+class Event:
+    """Dataclass representation of an event."""
+
+    post_link: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    event_date: Optional[datetime] = None
+    event_date_is_approximate: bool = False
+    location: Optional[str] = None
+    event_type: Optional[str] = None
+    confidence: Optional[Decimal] = None
+    additional_data: Optional[dict] = None
+    id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    @staticmethod
+    def from_row(row: dict) -> "Event":
+        """Create Event from database row."""
+
+        # Helper to parse JSON if it's a string, otherwise return as-is
+        def parse_json(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return json.loads(value)
+            return value
+
+        return Event(
+            id=row.get("id"),
+            post_link=row["post_link"],
+            title=row.get("title"),
+            summary=row.get("summary"),
+            event_date=row.get("event_date"),
+            event_date_is_approximate=row.get("event_date_is_approximate", False),
+            location=row.get("location"),
+            event_type=row.get("event_type"),
+            confidence=row.get("confidence"),
+            additional_data=parse_json(row.get("additional_data")),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at"),
+        )

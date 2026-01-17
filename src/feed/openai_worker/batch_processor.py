@@ -10,52 +10,31 @@ from decimal import Decimal
 from openai import OpenAI
 
 from .config import openai_settings
-from ..db.models import RSSPost, OpenAIRequestLog
-from ..db.repository import RSSPostRepository, OpenAIRequestLogRepository
+from ..db.models import RSSPost, OpenAIRequestLog, Event
+from ..db.repository import RSSPostRepository, OpenAIRequestLogRepository, EventRepository
 
 
 class BatchProcessor:
     """Handles OpenAI Batch API requests for event classification."""
 
-    SYSTEM_PROMPT = """You are an event classification assistant. Analyze RSS feed posts and determine if they describe upcoming events.
+    SYSTEM_PROMPT = """Classify if posts describe events (conferences, meetups, launches, workshops, etc.). Events have specific dates/times and activities.
 
-An event must have:
-1. A specific date or time period (future or recent past)
-2. A specific activity, gathering, or occurrence
-3. Usually a location (physical or virtual)
-
-Examples of events:
-- Conferences, meetups, webinars
-- Product launches, releases
-- Workshops, training sessions
-- Competitions, hackathons
-- Exhibitions, fairs
-
-NOT events:
-- General news articles
-- Blog posts without specific event details
-- Announcements without date/time
-- Regular content updates
-
-Respond in JSON format:
+JSON response format:
 {
     "is_event": true/false,
     "confidence": 0.0-1.0,
-    "reasoning": "brief explanation",
     "event_details": {
-        "date": "extracted date if available",
-        "location": "extracted location if available",
-        "event_type": "conference/meetup/webinar/etc"
+        "date": "date if found",
+        "location": "location if found",
+        "type": "event type"
     }
 }"""
 
-    USER_PROMPT_TEMPLATE = """Analyze this RSS post and determine if it's an event:
-
-Title/Link: {link}
+    USER_PROMPT_TEMPLATE = """Link: {link}
 Content: {content}
-Publication Date: {pub_date}
+Date: {pub_date}
 
-Is this an event? Provide your analysis in JSON format."""
+Is this an event?"""
 
     def __init__(self):
         """Initialize the batch processor."""
@@ -341,7 +320,6 @@ Is this an event? Provide your analysis in JSON format."""
                     is_event = classification.get("is_event", False)
                     classification_data = {
                         "confidence": classification.get("confidence", 0.0),
-                        "reasoning": classification.get("reasoning", ""),
                         "event_details": classification.get("event_details", {}),
                         "model": openai_settings.model,
                         "classified_at": datetime.now().isoformat(),
@@ -352,6 +330,55 @@ Is this an event? Provide your analysis in JSON format."""
                         is_event=is_event,
                         classification_data=classification_data,
                     )
+
+                    # If it's an event, create an entry in the events table
+                    if is_event:
+                        event_details = classification.get("event_details", {})
+
+                        # Extract and parse event date if available
+                        event_date = None
+                        event_date_str = event_details.get("date")
+                        if event_date_str:
+                            try:
+                                # Try to parse the date
+                                event_date = datetime.fromisoformat(
+                                    event_date_str.replace("Z", "+00:00")
+                                )
+                                if event_date.tzinfo is not None:
+                                    event_date = event_date.replace(tzinfo=None)
+                            except (ValueError, AttributeError):
+                                # If parsing fails, leave it as None
+                                pass
+
+                        # Extract title from link (simple extraction)
+                        title = (
+                            matching_post.link.split("/")[-1][:500] if matching_post.link else None
+                        )
+
+                        # Create event
+                        event = Event(
+                            post_link=matching_post.link,
+                            title=title,
+                            summary=matching_post.content[:1000] if matching_post.content else None,
+                            event_date=event_date,
+                            event_date_is_approximate=event_date is None or not event_date_str,
+                            location=event_details.get("location"),
+                            event_type=event_details.get("type"),
+                            confidence=Decimal(str(classification.get("confidence", 0.0))),
+                            additional_data={
+                                "classification_model": openai_settings.model,
+                                "original_content_length": len(matching_post.content),
+                                "pub_date": matching_post.pub_date.isoformat()
+                                if matching_post.pub_date
+                                else None,
+                            },
+                        )
+
+                        try:
+                            event_id = await EventRepository.create(event)
+                            print(f"  → Created event #{event_id} in events table")
+                        except Exception as e:
+                            print(f"  ⚠ Failed to create event: {e}")
 
                     # Log the successful response
                     log = await OpenAIRequestLogRepository.get_by_custom_id(custom_id)
