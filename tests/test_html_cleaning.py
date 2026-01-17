@@ -1,6 +1,6 @@
 """Tests for HTML content cleaning functionality."""
 
-from rss_parser.utils.html import clean_content
+from feed.utils.html import clean_content
 
 
 class TestCleanContent:

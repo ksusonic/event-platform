@@ -1,4 +1,4 @@
-"""Entry point for python -m rss_parser."""
+"""Entry point for python -m feed."""
 
 from .cli import main
 

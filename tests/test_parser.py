@@ -1,6 +1,6 @@
 """Tests for RSS parser."""
 
-from rss_parser import RSSParser, RSSChannel, RSSItem
+from feed import RSSParser, RSSChannel, RSSItem
 
 
 def test_parse_rss_content():

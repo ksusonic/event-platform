@@ -5,11 +5,12 @@ import asyncio
 import logging
 import json
 from typing import Tuple
-from rss_parser.core.parser import RSSParser
-from rss_parser.db.session import db
-from rss_parser.db.repository import RSSPostRepository, TelegramChannelRepository
-from rss_parser.db.models import RSSPost, TelegramChannel
-from rss_parser.utils.rss_bridge import build_rss_bridge_url
+from feed.core.parser import RSSParser
+from feed.db.session import db
+from feed.db.repository import RSSPostRepository, TelegramChannelRepository
+from feed.db.models import RSSPost, TelegramChannel
+from feed.utils.rss_bridge import build_rss_bridge_url
+from feed.openai_worker import OpenAIWorker
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -238,12 +239,48 @@ async def process_single_url(url: str):
 async def async_main():
     """Async main CLI entrypoint."""
     if len(sys.argv) < 2:
-        # No URL provided - process all Telegram channels from database
-        await process_all_channels()
+        # No arguments - show usage
+        print("Usage:")
+        print("  python -m feed                    # Process all Telegram channels")
+        print("  python -m feed <rss_url>          # Process single RSS URL")
+        print("  python -m feed openai-classify    # Run OpenAI event classification")
+        print("  python -m feed openai-check <batch_id>  # Check batch status")
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    if command == "openai-classify":
+        # Run OpenAI worker
+        worker = OpenAIWorker()
+        await worker.run()
+    elif command == "openai-check":
+        # Check batch status
+        if len(sys.argv) < 3:
+            print("Error: batch_id required")
+            print("Usage: python -m feed openai-check <batch_id>")
+            sys.exit(1)
+
+        batch_id = sys.argv[2]
+        await db.connect()
+        try:
+            worker = OpenAIWorker()
+            status = await worker.check_batch(batch_id)
+            print("\nBatch Status:")
+            print("=" * 80)
+            print(f"ID: {status['id']}")
+            print(f"Status: {status['status']}")
+            print(f"Total: {status['request_counts']['total']}")
+            print(f"Completed: {status['request_counts']['completed']}")
+            print(f"Failed: {status['request_counts']['failed']}")
+            print("=" * 80)
+        finally:
+            await db.disconnect()
+    elif command.startswith("http"):
+        # URL provided - process single RSS feed
+        await process_single_url(command)
     else:
-        # URL provided - process single RSS feed (legacy mode)
-        url = sys.argv[1]
-        await process_single_url(url)
+        print(f"Unknown command: {command}")
+        sys.exit(1)
 
 
 def main():

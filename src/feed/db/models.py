@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Optional
 from email.utils import parsedate_to_datetime
+from decimal import Decimal
 import json
 
 
@@ -121,4 +122,63 @@ class RSSPost:
             created_at=row.get("created_at"),
             updated_at=row.get("updated_at"),
             classified_at=row.get("classified_at"),
+        )
+
+
+@dataclass
+class OpenAIRequestLog:
+    """Dataclass representation of an OpenAI request log."""
+
+    request_type: str  # 'batch', 'completion', etc.
+    model: str
+    endpoint: str
+    status: str = "pending"  # 'pending', 'completed', 'failed'
+    id: Optional[int] = None
+    batch_id: Optional[str] = None
+    custom_id: Optional[str] = None
+    request_data: Optional[dict] = None
+    response_data: Optional[dict] = None
+    status_code: Optional[int] = None
+    tokens_used: Optional[int] = None
+    cost_estimate: Optional[Decimal] = None
+    error_message: Optional[str] = None
+    post_link: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    @staticmethod
+    def from_row(row: dict) -> "OpenAIRequestLog":
+        """Create OpenAIRequestLog from database row."""
+
+        # Helper to parse JSON if it's a string, otherwise return as-is
+        def parse_json(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return json.loads(value)
+            return value
+
+        return OpenAIRequestLog(
+            id=row.get("id"),
+            batch_id=row.get("batch_id"),
+            custom_id=row.get("custom_id"),
+            request_type=row["request_type"],
+            model=row["model"],
+            endpoint=row["endpoint"],
+            request_data=parse_json(row.get("request_data")),
+            response_data=parse_json(row.get("response_data")),
+            status=row["status"],
+            status_code=row.get("status_code"),
+            tokens_used=row.get("tokens_used"),
+            cost_estimate=row.get("cost_estimate"),
+            error_message=row.get("error_message"),
+            post_link=row.get("post_link"),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at"),
+            completed_at=row.get("completed_at"),
         )
