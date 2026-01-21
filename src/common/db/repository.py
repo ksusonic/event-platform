@@ -189,3 +189,27 @@ class RSSPostRepository:
         query = "SELECT 1 FROM rss_posts WHERE link = $1 LIMIT 1"
         result = await db.fetchval(query, link)
         return result is not None
+
+    @staticmethod
+    async def get_recent_posts_excluding(
+        days: int, exclude_links: List[str], limit: int = 1000
+    ) -> List[RSSPost]:
+        """Get posts from the last N days, excluding specified links.
+
+        Args:
+            days: Number of days to look back
+            exclude_links: List of post links to exclude
+            limit: Maximum number of posts to return
+
+        Returns:
+            List of RSSPost instances
+        """
+        query = f"""
+            SELECT * FROM rss_posts 
+            WHERE pub_date >= NOW() - INTERVAL '{days} days'
+            AND link != ALL($1)
+            ORDER BY pub_date DESC 
+            LIMIT $2
+        """
+        rows = await db.fetch(query, exclude_links or [], limit)
+        return [RSSPost.from_row(row) for row in rows]

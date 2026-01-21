@@ -5,8 +5,9 @@ Run with: python -m src.digest_publisher
 
 import asyncio
 import logging
-from typing import List
+from typing import List, Dict
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from telegram import Bot
 from telegram.constants import ParseMode
@@ -24,31 +25,65 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def prepare_posts_for_prompt(posts: List[RSSPost]) -> str:
+def prepare_posts_for_prompt(posts: List[RSSPost], section_title: str = "Posts") -> str:
     """
-    Prepare posts in a format suitable for OpenAI prompt.
+    Prepare posts in a format suitable for OpenAI prompt, grouped by day.
 
     Args:
         posts: List of RSSPost objects
+        section_title: Title for this section of posts
 
     Returns:
-        Formatted string with all posts
+        Formatted string with all posts grouped by day
     """
-    formatted_posts = []
+    if not posts:
+        return ""
 
-    for i, post in enumerate(posts, 1):
-        post_info = [f"\n--- Post {i} ---"]
-
+    # Group posts by date
+    posts_by_date: Dict[str, List[RSSPost]] = defaultdict(list)
+    for post in posts:
         if post.pub_date:
-            post_info.append(f"Date: {post.pub_date.strftime('%Y-%m-%d %H:%M')}")
+            date_key = post.pub_date.strftime("%Y-%m-%d")
+            posts_by_date[date_key].append(post)
+        else:
+            # Posts without date go to "Unknown Date"
+            posts_by_date["Unknown Date"].append(post)
 
-        if post.content:
-            # Truncate very long content
-            content = post.content[:1000] + "..." if len(post.content) > 1000 else post.content
-            post_info.append(f"Content: {content}")
+    # Sort dates in descending order (newest first)
+    sorted_dates = sorted([d for d in posts_by_date.keys() if d != "Unknown Date"], reverse=True)
+    if "Unknown Date" in posts_by_date:
+        sorted_dates.append("Unknown Date")
 
-        post_info.append(f"Source: {post.link}")
-        formatted_posts.append("\n".join(post_info))
+    formatted_posts = [f"\n=== {section_title} ==="]
+
+    post_counter = 1
+    for date_key in sorted_dates:
+        day_posts = posts_by_date[date_key]
+
+        # Add day header
+        if date_key == "Unknown Date":
+            formatted_posts.append(f"\n## {date_key} ({len(day_posts)} posts)")
+        else:
+            # Convert to more readable format
+            date_obj = datetime.strptime(date_key, "%Y-%m-%d")
+            day_name = date_obj.strftime("%A, %B %d, %Y")
+            formatted_posts.append(f"\n## {day_name} ({len(day_posts)} posts)")
+
+        # Add posts for this day
+        for post in day_posts:
+            post_info = [f"\n--- Post {post_counter} ---"]
+
+            if post.pub_date:
+                post_info.append(f"Time: {post.pub_date.strftime('%H:%M')}")
+
+            if post.content:
+                # Truncate very long content
+                content = post.content[:1000] + "..." if len(post.content) > 1000 else post.content
+                post_info.append(f"Content: {content}")
+
+            post_info.append(f"Source: {post.link}")
+            formatted_posts.append("\n".join(post_info))
+            post_counter += 1
 
     return "\n".join(formatted_posts)
 
@@ -69,32 +104,61 @@ async def generate_ai_digest(posts: List[RSSPost], client: AsyncOpenAI) -> str:
 
     logger.info(f"Generating AI digest for {len(posts)} posts...")
 
+    # Get links of current posts to exclude from historical lookup
+    current_post_links = [post.link for post in posts]
+
+    # Fetch previous posts from last 2 days (excluding current posts)
+    logger.info("Fetching previous posts from last 2 days...")
+    previous_posts = await RSSPostRepository.get_recent_posts_excluding(
+        days=2,
+        exclude_links=current_post_links,
+        limit=50,  # Limit to avoid overwhelming the context
+    )
+    logger.info(f"Found {len(previous_posts)} previous posts to include as context")
+
     # Prepare posts for the prompt
-    posts_content = prepare_posts_for_prompt(posts)
+    posts_content = prepare_posts_for_prompt(posts, "CURRENT Posts to Summarize")
+    previous_posts_content = prepare_posts_for_prompt(
+        previous_posts, "PREVIOUS Posts (Already Published - DO NOT REPEAT)"
+    )
 
     # Create the system prompt
     system_prompt = """Developer: # Role and Objective
 - Deliver engaging and informative news digests optimized for Telegram channels.
+- Organize news by date to provide clear chronological context.
 
 # Checklist (Plan First)
 Begin with a concise checklist (3-7 bullets) of what you will do; keep items conceptual, not implementation-level.
 - Review all supplied posts to extract key topics.
 - Identify the main points for summary inclusion.
-- Group related topics for a logical, cohesive flow.
+- Group posts by day for chronological organization.
+- Within each day, group related topics for a logical flow.
 - Plan emoji and formatting usage for engagement.
 - Ensure all formatting aligns with Telegram HTML specifications.
 
 # Instructions
-1. Analyze every provided post thoroughly.
+1. Analyze every provided CURRENT post thoroughly.
 2. Create a concise, engaging summary that highlights critical information.
-3. Structure the summary to be Telegram-friendly, utilizing emojis strategically.
-4. Make the digest informative and easy to read.
-5. Organize related topics together for improved clarity.
+3. **ORGANIZE BY DAYS**: Structure your digest with clear day-based sections (e.g., "📅 Monday, January 20, 2026").
+4. Within each day, group related topics together for improved clarity.
+5. Structure the summary to be Telegram-friendly, utilizing emojis strategically.
+6. Make the digest informative and easy to read.
+7. **CRITICAL**: You will be provided with PREVIOUS posts that were already published. DO NOT include or mention these previous posts in your digest. They are provided only for context to avoid duplication and repetition.
+8. Focus ONLY on the CURRENT posts section. Ignore and skip all posts from the PREVIOUS section.
+
+# Anti-Repetition Rules
+- **DO NOT** summarize, mention, or include any content from the "PREVIOUS Posts" section.
+- **ONLY** create a digest from the "CURRENT Posts to Summarize" section.
+- The previous posts are shown only to help you avoid accidentally repeating similar topics or news.
+- If a current post is very similar to a previous post, you may briefly mention it's an update, but focus on what's new.
 
 # Format Guidelines
 - Start with a catchy, attention-grabbing header.
-- Integrate emojis thoughtfully (e.g., 📰 🔥 💡 ⚡ 🏆).
+- **Organize content by date**: Use clear day headers (e.g., "📅 <b>Monday, January 20, 2026</b>").
+- Within each day, present news items in a logical, thematic flow.
+- Integrate emojis thoughtfully (e.g., 📰 🔥 💡 ⚡ 🏆 📅 🗓️).
 - Limit paragraph length to enhance readability.
+- Use visual separators between different days.
 
 # Critical Formatting Rules
 - Always use Telegram HTML tags for formatting:
@@ -109,20 +173,39 @@ Begin with a concise checklist (3-7 bullets) of what you will do; keep items con
 - Confirm all output formatting complies with Telegram HTML.
 - Verify effective use of emojis and sectioning for clarity and engagement.
 - Ensure the final summary fulfills the brief and is ready for posting.
+- Verify you have NOT included any posts from the PREVIOUS section.
 
 # Post-action Validation
 After generating the digest, validate in 1-2 lines that formatting adheres to Telegram HTML, emojis are used effectively, and the summary meets all requirements. If any aspect is lacking, revise minimally and re-check.
 
 # Example Formatting
-<b>Important Header</b>
-This is regular text with an <i>emphasized word</i> and a <a href="https://example.com">link</a>."""
+<b>🗞️ News Digest - Week of January 20, 2026</b>
+
+📅 <b>Monday, January 20, 2026</b>
+🔥 <b>Hot Topic</b>
+Summary of the main news with an <i>emphasized word</i> and a <a href="https://example.com">link</a>.
+
+💡 <b>Another Story</b>
+More details here.
+
+📅 <b>Tuesday, January 21, 2026</b>
+⚡ <b>Breaking News</b>
+Latest updates from today."""
 
     # Create the user prompt
-    user_prompt = f"""Please create an engaging news digest from the following {len(posts)} posts:
-
-{posts_content}
-
-Create a Telegram-friendly digest that readers will find informative and easy to read."""
+    user_prompt_parts = [
+        "Please create an engaging news digest from the CURRENT posts below.",
+        f"\n{previous_posts_content}" if previous_posts else "",
+        f"\n{posts_content}",
+        f"\n\n**IMPORTANT**: Create a digest ONLY from the {len(posts)} CURRENT posts listed above.",
+        f"DO NOT include or mention any of the {len(previous_posts)} previous posts - they are provided only for context."
+        if previous_posts
+        else "",
+        "\n\n**STRUCTURE**: Organize the digest by date. Group posts under clear day headers (e.g., '📅 Monday, January 20, 2026').",
+        "Within each day, present related news together in a coherent flow.",
+        "\nCreate a Telegram-friendly digest that readers will find informative, chronologically organized, and easy to read.",
+    ]
+    user_prompt = "".join(user_prompt_parts)
 
     try:
         # Call OpenAI API
