@@ -148,9 +148,8 @@ Is this an event?"""
                 custom_id = f"post_{i}_{link_hash}"
                 log = await OpenAIRequestLogRepository.get_by_custom_id(custom_id)
                 if log and log.batch_id is None:
-                    # Update with batch_id
                     query = "UPDATE openai_request_logs SET batch_id = $1 WHERE id = $2"
-                    from ..db.session import db
+                    from common.db.session import db
 
                     await db.execute(query, batch.id, log.id)
                     break

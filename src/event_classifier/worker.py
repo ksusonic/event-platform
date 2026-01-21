@@ -121,34 +121,28 @@ class OpenAIWorker:
         print("=" * 80)
         print()
 
-        # Ensure database is connected
         if not db.pool:
-            print("Connecting to database...")
             await db.connect()
 
-        try:
-            result = await self.process_unprocessed_posts(wait_for_completion=True)
+        result = await self.process_unprocessed_posts(wait_for_completion=True)
 
-            print("\n" + "=" * 80)
-            print("Processing Summary")
-            print("=" * 80)
-            print(f"Status: {result['status']}")
-            print(f"Posts processed: {result['posts_count']}")
-            if result.get("batch_id"):
-                print(f"Batch ID: {result['batch_id']}")
-            if result.get("stats"):
-                stats = result["stats"]
-                print("\nResults:")
-                print(f"  Total responses: {stats['total']}")
-                print(f"  Successful: {stats['success']}")
-                print(f"  Failed: {stats['failed']}")
-                print(f"  Events found: {stats['events_found']}")
-            print("=" * 80)
+        print("\n" + "=" * 80)
+        print("Processing Summary")
+        print("=" * 80)
+        print(f"Status: {result['status']}")
+        print(f"Posts processed: {result['posts_count']}")
+        if result.get("batch_id"):
+            print(f"Batch ID: {result['batch_id']}")
+        if result.get("stats"):
+            stats = result["stats"]
+            print("\nResults:")
+            print(f"  Total responses: {stats['total']}")
+            print(f"  Successful: {stats['success']}")
+            print(f"  Failed: {stats['failed']}")
+            print(f"  Events found: {stats['events_found']}")
+        print("=" * 80)
 
-        finally:
-            # Close database connection
-            if db.pool:
-                await db.disconnect()
+        return result
 
 
 async def main():

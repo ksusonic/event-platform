@@ -61,9 +61,9 @@ async def main():
     logger.info("Starting Summarizer service...")
 
     try:
-        # Connect to database
-        await db.connect()
-        logger.info("Connected to database")
+        if not db.pool:
+            await db.connect()
+            logger.info("Connected to database")
 
         # Get events from the last 7 days
         end_date = datetime.now()
@@ -83,15 +83,12 @@ async def main():
 
         logger.info(f"Successfully summarized {len(events)} events")
 
+        return {"event_count": len(events)}
+
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         print(f"Error: {e}")
-        import sys
-
-        sys.exit(1)
-    finally:
-        await db.disconnect()
-        logger.info("Disconnected from database")
+        raise
 
 
 if __name__ == "__main__":

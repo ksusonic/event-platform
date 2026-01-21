@@ -5,7 +5,6 @@ Run with: python -m src.digest_publisher
 
 import asyncio
 import logging
-import os
 from typing import List
 from datetime import datetime, timedelta
 
@@ -104,9 +103,9 @@ async def main():
     logger.info("Starting Digest Publisher service...")
 
     try:
-        # Connect to database
-        await db.connect()
-        logger.info("Connected to database")
+        if not db.pool:
+            await db.connect()
+            logger.info("Connected to database")
 
         # Get events from the next 7 days
         start_date = datetime.now()
@@ -128,15 +127,12 @@ async def main():
 
         logger.info(f"Successfully published digest with {len(events)} events")
 
+        return {"published_count": len(events)}
+
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         print(f"Error: {e}")
-        import sys
-
-        sys.exit(1)
-    finally:
-        await db.disconnect()
-        logger.info("Disconnected from database")
+        raise
 
 
 if __name__ == "__main__":

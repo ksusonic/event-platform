@@ -62,9 +62,7 @@ class PipelineOrchestrator:
 
         if not logger.handlers:
             handler = logging.StreamHandler(sys.stdout)
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
@@ -172,6 +170,13 @@ class PipelineOrchestrator:
         self.logger.info("🎬 Starting Pipeline Execution")
         self.logger.info("=" * 80)
 
+        # Import db here to avoid circular imports
+        from common.db.session import db
+
+        # Connect to database once for all agents
+        await db.connect()
+        self.logger.info("📊 Connected to database")
+
         pipeline_start = asyncio.get_event_loop().time()
         self.results = []
 
@@ -214,6 +219,12 @@ class PipelineOrchestrator:
         pipeline_duration = asyncio.get_event_loop().time() - pipeline_start
         self._print_summary(pipeline_duration)
 
+        # Disconnect from database
+        from common.db.session import db
+
+        await db.disconnect()
+        self.logger.info("📊 Disconnected from database")
+
         return self.results
 
     def _print_summary(self, duration: float):
@@ -246,12 +257,16 @@ class PipelineOrchestrator:
         failed_count = sum(1 for r in self.results if r.status == AgentStatus.FAILED)
         skipped_count = sum(1 for r in self.results if r.status == AgentStatus.SKIPPED)
 
-        self.logger.info(f"Results: {success_count} succeeded, {failed_count} failed, {skipped_count} skipped")
+        self.logger.info(
+            f"Results: {success_count} succeeded, {failed_count} failed, {skipped_count} skipped"
+        )
         self.logger.info("=" * 80)
 
     async def run_scheduled(self):
         """Run the pipeline on a schedule."""
-        self.logger.info(f"📅 Starting scheduled pipeline (interval: {self.config.run_interval_minutes}m)")
+        self.logger.info(
+            f"📅 Starting scheduled pipeline (interval: {self.config.run_interval_minutes}m)"
+        )
 
         while True:
             try:

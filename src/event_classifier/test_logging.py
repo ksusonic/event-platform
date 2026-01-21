@@ -3,9 +3,9 @@
 import asyncio
 from decimal import Decimal
 
-from ..db.models import OpenAIRequestLog
-from ..db.repository import OpenAIRequestLogRepository
-from ..db.session import db
+from common.db.models import OpenAIRequestLog
+from common.db.repository import OpenAIRequestLogRepository
+from common.db.session import db
 
 
 async def test_logging():
