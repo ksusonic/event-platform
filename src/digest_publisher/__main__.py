@@ -5,8 +5,13 @@ Run with: python -m src.digest_publisher
 
 import asyncio
 import logging
+import os
 from typing import List
 from datetime import datetime, timedelta
+
+from telegram import Bot
+from telegram.constants import ParseMode
+from telegram.error import TelegramError
 
 from common.db.session import db
 from common.db.repository import RSSPostRepository
@@ -18,9 +23,45 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escape special characters for Telegram MarkdownV2.
+
+    Args:
+        text: Text to escape
+
+    Returns:
+        Escaped text
+    """
+    # Characters that need to be escaped in MarkdownV2
+    special_chars = [
+        "_",
+        "*",
+        "[",
+        "]",
+        "(",
+        ")",
+        "~",
+        "`",
+        ">",
+        "#",
+        "+",
+        "-",
+        "=",
+        "|",
+        "{",
+        "}",
+        ".",
+        "!",
+    ]
+    for char in special_chars:
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
 def format_post_for_telegram(post: RSSPost) -> str:
     """
-    Format a post for Telegram message.
+    Format a post for Telegram message with MarkdownV2.
 
     Args:
         post: RSSPost object
@@ -35,14 +76,17 @@ def format_post_for_telegram(post: RSSPost) -> str:
     if len(title) < 10 and post.content:
         title = post.content.split("\n")[0][:100]
 
-    lines.append(f"📰 **{title}**")
+    title = escape_markdown_v2(title)
+    lines.append(f"📰 *{title}*")
 
     if post.pub_date:
-        lines.append(f"🕐 {post.pub_date.strftime('%Y-%m-%d %H:%M')}")
+        date_str = escape_markdown_v2(post.pub_date.strftime("%Y-%m-%d %H:%M"))
+        lines.append(f"🕐 {date_str}")
 
     if post.content:
         # Truncate long content for Telegram
         content = post.content[:300] + "..." if len(post.content) > 300 else post.content
+        content = escape_markdown_v2(content)
         lines.append(f"\n{content}")
 
     lines.append(f"\n🔗 [Read more]({post.link})")
@@ -61,18 +105,18 @@ def create_digest(posts: List[RSSPost]) -> str:
         Formatted digest string
     """
     if not posts:
-        return "No posts found for this period."
+        return "No posts found for this period\."
 
     lines = []
-    lines.append("📣 **News Digest**")
+    lines.append("📣 *News Digest*")
     lines.append(f"Found {len(posts)} recent posts\n")
-    lines.append("=" * 40)
+    lines.append(escape_markdown_v2("=" * 40))
     lines.append("")
 
     for i, post in enumerate(posts, 1):
         lines.append(format_post_for_telegram(post))
         if i < len(posts):
-            lines.append("\n" + "-" * 40 + "\n")
+            lines.append("\n" + escape_markdown_v2("-" * 40) + "\n")
 
     return "\n".join(lines)
 
@@ -83,20 +127,54 @@ async def publish_to_telegram(message: str):
 
     Args:
         message: Message to publish
-    """
-    # TODO: Implement actual Telegram bot integration
-    # For now, just print the message
-    logger.info("Publishing to Telegram (stub implementation):")
-    print("\n" + "=" * 80)
-    print("TELEGRAM DIGEST")
-    print("=" * 80)
-    print(message)
-    print("=" * 80)
 
-    # In production, this would use something like:
-    # bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    # chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    # Send message via Telegram Bot API
+    Raises:
+        ValueError: If bot token or chat ID not configured
+        TelegramError: If sending message fails
+    """
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+    if not bot_token:
+        logger.warning("TELEGRAM_BOT_TOKEN not set, printing to console instead")
+        print("\n" + "=" * 80)
+        print("TELEGRAM DIGEST (BOT TOKEN NOT CONFIGURED)")
+        print("=" * 80)
+        print(message)
+        print("=" * 80)
+        return
+
+    if not chat_id:
+        raise ValueError("TELEGRAM_CHAT_ID environment variable is required")
+
+    try:
+        bot = Bot(token=bot_token)
+
+        # Split message if it exceeds Telegram's limit (4096 characters)
+        max_length = 4000  # Leave some margin
+        if len(message) <= max_length:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=message,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True,
+            )
+            logger.info(f"Successfully sent digest to Telegram chat {chat_id}")
+        else:
+            # Split into multiple messages
+            parts = [message[i : i + max_length] for i in range(0, len(message), max_length)]
+            for i, part in enumerate(parts, 1):
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=part,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    disable_web_page_preview=True,
+                )
+                logger.info(f"Sent part {i}/{len(parts)} to Telegram")
+
+    except TelegramError as e:
+        logger.error(f"Failed to send message to Telegram: {e}")
+        raise
 
 
 async def main():
