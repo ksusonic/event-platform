@@ -42,6 +42,8 @@ class RSSPost:
     content: str
     pub_date: Optional[datetime] = None
     media: Optional[str] = None
+    is_published: bool = False
+    published_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -97,6 +99,8 @@ class RSSPost:
             content=row["content"],
             pub_date=row.get("pub_date"),
             media=row.get("media"),
+            is_published=row.get("is_published", False),
+            published_at=row.get("published_at"),
             created_at=row.get("created_at"),
             updated_at=row.get("updated_at"),
         )

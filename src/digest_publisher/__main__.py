@@ -380,6 +380,11 @@ async def main():
         # Publish to Telegram
         await publish_to_telegram(digest)
 
+        # Mark posts as published after successful publication
+        post_links = [post.link for post in posts]
+        updated_count = await RSSPostRepository.mark_as_published(post_links)
+        logger.info(f"Marked {updated_count} posts as published")
+
         logger.info(f"Successfully published AI digest with {len(posts)} posts")
 
         return {"published_count": len(posts)}
