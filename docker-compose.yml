@@ -10,6 +10,34 @@ services:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d eventdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pipeline:
+    build: .
+    container_name: event-pipeline
+    command: python -m src.pipeline --schedule
+    environment:
+      - DATABASE_URL=postgresql://root:password@postgres_db:5432/eventdb
+      - PIPELINE_INTERVAL_MINUTES=60
+      - PIPELINE_LOG_LEVEL=INFO
+      - RSS_READER_TIMEOUT=300
+      - EVENT_CLASSIFIER_TIMEOUT=600
+      - SUMMARIZER_TIMEOUT=180
+      - DIGEST_PUBLISHER_TIMEOUT=120
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
 
 volumes:
   postgres-data:
