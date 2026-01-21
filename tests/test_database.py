@@ -3,7 +3,7 @@
 import pytest
 import pytest_asyncio
 from datetime import datetime
-from src.rss_parser.db import db, RSSPost, RSSPostRepository
+from src.feed.db import db, RSSPost, RSSPostRepository
 
 
 @pytest_asyncio.fixture(autouse=True)
