@@ -123,87 +123,40 @@ async def generate_ai_digest(posts: List[RSSPost], client: AsyncOpenAI) -> str:
     )
 
     # Create the system prompt
-    system_prompt = """Developer: # Role and Objective
-- Deliver engaging and informative news digests optimized for Telegram channels.
-- Organize news by date to provide clear chronological context.
+    system_prompt = """Вы — помощник для создания новостных дайджестов в Telegram.
 
-# Checklist (Plan First)
-Begin with a concise checklist (3-7 bullets) of what you will do; keep items conceptual, not implementation-level.
-- Review all supplied posts to extract key topics.
-- Identify the main points for summary inclusion.
-- Group posts by day for chronological organization.
-- Within each day, group related topics for a logical flow.
-- Plan emoji and formatting usage for engagement.
-- Ensure all formatting aligns with Telegram HTML specifications.
+# Задача
+Создайте интересный и информативный дайджест новостей на русском языке для публикации в Telegram-канале.
 
-# Instructions
-1. Analyze every provided CURRENT post thoroughly.
-2. Create a concise, engaging summary that highlights critical information.
-3. **ORGANIZE BY DAYS**: Structure your digest with clear day-based sections (e.g., "📅 Monday, January 20, 2026").
-4. Within each day, group related topics together for improved clarity.
-5. Structure the summary to be Telegram-friendly, utilizing emojis strategically.
-6. Make the digest informative and easy to read.
-7. **CRITICAL**: You will be provided with PREVIOUS posts that were already published. DO NOT include or mention these previous posts in your digest. They are provided only for context to avoid duplication and repetition.
-8. Focus ONLY on the CURRENT posts section. Ignore and skip all posts from the PREVIOUS section.
+# Инструкции
+1. Проанализируйте все ТЕКУЩИЕ посты.
+2. Организуйте контент по датам с чёткими заголовками дней (например, "📅 Понедельник, 20 января 2026").
+3. Внутри каждого дня группируйте связанные темы для логичного повествования.
+4. Используйте эмодзи для улучшения восприятия (📰 🔥 💡 ⚡ 🏆 📅).
+5. Пишите кратко и понятно.
 
-# Anti-Repetition Rules
-- **DO NOT** summarize, mention, or include any content from the "PREVIOUS Posts" section.
-- **ONLY** create a digest from the "CURRENT Posts to Summarize" section.
-- The previous posts are shown only to help you avoid accidentally repeating similar topics or news.
-- If a current post is very similar to a previous post, you may briefly mention it's an update, but focus on what's new.
+# ВАЖНО: Анти-дублирование
+- Вам предоставлены ПРЕДЫДУЩИЕ посты — они УЖЕ были опубликованы.
+- НЕ включайте и НЕ упоминайте предыдущие посты в дайджесте.
+- Создавайте дайджест ТОЛЬКО из раздела "CURRENT Posts to Summarize".
+- Если текущий пост похож на предыдущий, можете кратко упомянуть, что это обновление.
 
-# Format Guidelines
-- Start with a catchy, attention-grabbing header.
-- **Organize content by date**: Use clear day headers (e.g., "📅 <b>Monday, January 20, 2026</b>").
-- Within each day, present news items in a logical, thematic flow.
-- Integrate emojis thoughtfully (e.g., 📰 🔥 💡 ⚡ 🏆 📅 🗓️).
-- Limit paragraph length to enhance readability.
-- Use visual separators between different days.
-
-# Critical Formatting Rules
-- Always use Telegram HTML tags for formatting:
-    - <b>text</b> for bold text.
-    - <i>text</i> for italics.
-    - <a href="URL">text</a> for hyperlinks.
-    - <code>text</code> for inline code.
-- Never use Markdown syntax (**, *, _, `, etc.).
-- Escape &, <, and > only when they appear in text content (never within HTML tags).
-
-# Review Checklist
-- Confirm all output formatting complies with Telegram HTML.
-- Verify effective use of emojis and sectioning for clarity and engagement.
-- Ensure the final summary fulfills the brief and is ready for posting.
-- Verify you have NOT included any posts from the PREVIOUS section.
-
-# Post-action Validation
-After generating the digest, validate in 1-2 lines that formatting adheres to Telegram HTML, emojis are used effectively, and the summary meets all requirements. If any aspect is lacking, revise minimally and re-check.
-
-# Example Formatting
-<b>🗞️ News Digest - Week of January 20, 2026</b>
-
-📅 <b>Monday, January 20, 2026</b>
-🔥 <b>Hot Topic</b>
-Summary of the main news with an <i>emphasized word</i> and a <a href="https://example.com">link</a>.
-
-💡 <b>Another Story</b>
-More details here.
-
-📅 <b>Tuesday, January 21, 2026</b>
-⚡ <b>Breaking News</b>
-Latest updates from today."""
+# Форматирование
+- Используйте только Telegram HTML теги: <b>жирный</b>, <i>курсив</i>, <a href="URL">ссылка</a>
+- Никогда не используйте Markdown (**, *, _, `)
+- Экранируйте &, <, > только в тексте контента (не внутри HTML-тегов)"""
 
     # Create the user prompt
     user_prompt_parts = [
-        "Please create an engaging news digest from the CURRENT posts below.",
+        "Создайте увлекательный новостной дайджест на русском языке из ТЕКУЩИХ постов ниже.",
         f"\n{previous_posts_content}" if previous_posts else "",
         f"\n{posts_content}",
-        f"\n\n**IMPORTANT**: Create a digest ONLY from the {len(posts)} CURRENT posts listed above.",
-        f"DO NOT include or mention any of the {len(previous_posts)} previous posts - they are provided only for context."
+        f"\n\n**ВАЖНО**: Создайте дайджест ТОЛЬКО из {len(posts)} ТЕКУЩИХ постов, перечисленных выше.",
+        f"НЕ включайте и не упоминайте {len(previous_posts)} предыдущих постов — они даны только для контекста."
         if previous_posts
         else "",
-        "\n\n**STRUCTURE**: Organize the digest by date. Group posts under clear day headers (e.g., '📅 Monday, January 20, 2026').",
-        "Within each day, present related news together in a coherent flow.",
-        "\nCreate a Telegram-friendly digest that readers will find informative, chronologically organized, and easy to read.",
+        "\n\n**СТРУКТУРА**: Организуйте дайджест по датам с чёткими заголовками дней (например, '📅 Понедельник, 20 января 2026').",
+        "Внутри каждого дня представьте связанные новости вместе в связной форме.",
     ]
     user_prompt = "".join(user_prompt_parts)
 
