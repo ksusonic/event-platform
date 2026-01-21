@@ -5,22 +5,128 @@ Run with: python -m src.digest_publisher
 
 import asyncio
 import logging
-import os
 from typing import List
 from datetime import datetime, timedelta
 
 from telegram import Bot
 from telegram.constants import ParseMode
-from telegram.error import TelegramError
+from telegram.error import TelegramError, NetworkError
+from openai import AsyncOpenAI
 
 from common.db.session import db
 from common.db.repository import RSSPostRepository
 from common.db.models import RSSPost
+from .config import digest_publisher_settings
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def prepare_posts_for_prompt(posts: List[RSSPost]) -> str:
+    """
+    Prepare posts in a format suitable for OpenAI prompt.
+
+    Args:
+        posts: List of RSSPost objects
+
+    Returns:
+        Formatted string with all posts
+    """
+    formatted_posts = []
+
+    for i, post in enumerate(posts, 1):
+        post_info = [f"\n--- Post {i} ---"]
+
+        if post.pub_date:
+            post_info.append(f"Date: {post.pub_date.strftime('%Y-%m-%d %H:%M')}")
+
+        if post.content:
+            # Truncate very long content
+            content = post.content[:1000] + "..." if len(post.content) > 1000 else post.content
+            post_info.append(f"Content: {content}")
+
+        post_info.append(f"Source: {post.link}")
+        formatted_posts.append("\n".join(post_info))
+
+    return "\n".join(formatted_posts)
+
+
+async def generate_ai_digest(posts: List[RSSPost], client: AsyncOpenAI) -> str:
+    """
+    Generate an AI-powered digest of RSS posts.
+
+    Args:
+        posts: List of RSSPost objects
+        client: AsyncOpenAI client instance
+
+    Returns:
+        AI-generated digest suitable for Telegram
+    """
+    if not posts:
+        return "No posts found for this period."
+
+    logger.info(f"Generating AI digest for {len(posts)} posts...")
+
+    # Prepare posts for the prompt
+    posts_content = prepare_posts_for_prompt(posts)
+
+    # Create the system prompt
+    system_prompt = """You are a helpful assistant that creates engaging news digests for Telegram channels.
+
+Your task is to:
+1. Analyze all the posts provided
+2. Create a concise, engaging summary that highlights the most important information
+3. Structure it as a Telegram-friendly message with emojis
+4. Keep it informative but readable
+5. Group related topics together
+
+Format guidelines:
+- Start with a catchy header
+- Use emojis strategically (📰 🔥 💡 ⚡ 🎯 etc.)
+- Keep paragraphs short
+
+CRITICAL FORMATTING RULES:
+- You MUST use HTML tags for formatting
+- Use <b>text</b> for bold (NOT **text**)
+- Use <i>text</i> for italic (NOT *text*)
+- Use <a href="URL">text</a> for links (NOT [text](URL))
+- Use <code>text</code> for code (NOT `text`)
+- DO NOT use Markdown syntax (**, *, _, `, etc.)
+- Only escape &, <, > when they appear in regular text (not in tags)
+
+Example of correct formatting:
+<b>Important Header</b>
+This is regular text with an <i>emphasized word</i> and a <a href="https://example.com">link</a>."""
+
+    # Create the user prompt
+    user_prompt = f"""Please create an engaging news digest from the following {len(posts)} posts:
+
+{posts_content}
+
+Create a Telegram-friendly digest that readers will find informative and easy to read."""
+
+    try:
+        # Call OpenAI API
+        response = await client.chat.completions.create(
+            model=digest_publisher_settings.openai_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=digest_publisher_settings.openai_max_tokens,
+            temperature=digest_publisher_settings.openai_temperature,
+        )
+
+        digest = response.choices[0].message.content
+        logger.info("Successfully generated AI digest")
+        return digest
+
+    except Exception as e:
+        logger.error(f"Failed to generate AI digest: {e}", exc_info=True)
+        # Fallback to simple message
+        return f"❌ Failed to generate digest: {str(e)}\n\nFound {len(posts)} posts from the last {digest_publisher_settings.days_back} days."
 
 
 def escape_markdown_v2(text: str) -> str:
@@ -105,7 +211,7 @@ def create_digest(posts: List[RSSPost]) -> str:
         Formatted digest string
     """
     if not posts:
-        return "No posts found for this period\."
+        return r"No posts found for this period\."
 
     lines = []
     lines.append("📣 *News Digest*")
@@ -126,14 +232,14 @@ async def publish_to_telegram(message: str):
     Publish message to Telegram.
 
     Args:
-        message: Message to publish
+        message: Message to publish (plain text, no markdown)
 
     Raises:
         ValueError: If bot token or chat ID not configured
         TelegramError: If sending message fails
     """
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    bot_token = digest_publisher_settings.telegram_bot_token
+    chat_id = digest_publisher_settings.telegram_chat_id
 
     if not bot_token:
         logger.warning("TELEGRAM_BOT_TOKEN not set, printing to console instead")
@@ -156,7 +262,7 @@ async def publish_to_telegram(message: str):
             await bot.send_message(
                 chat_id=chat_id,
                 text=message,
-                parse_mode=ParseMode.MARKDOWN_V2,
+                parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
             logger.info(f"Successfully sent digest to Telegram chat {chat_id}")
@@ -167,11 +273,18 @@ async def publish_to_telegram(message: str):
                 await bot.send_message(
                     chat_id=chat_id,
                     text=part,
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                    parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
                 logger.info(f"Sent part {i}/{len(parts)} to Telegram")
+                # Small delay between messages
+                if i < len(parts):
+                    await asyncio.sleep(0.5)
 
+    except NetworkError as e:
+        logger.error(f"Network error connecting to Telegram: {e}")
+        logger.error("Check your internet connection, proxy settings, or firewall")
+        raise
     except TelegramError as e:
         logger.error(f"Failed to send message to Telegram: {e}")
         raise
@@ -179,35 +292,51 @@ async def publish_to_telegram(message: str):
 
 async def main():
     """Main entry point for Digest Publisher service."""
-    logger.info("Starting Digest Publisher service...")
+    logger.info(f"Using OpenAI model: {digest_publisher_settings.openai_model}")
 
     try:
         if not db.pool:
             await db.connect()
             logger.info("Connected to database")
 
-        # Get posts from the last 7 days
+        # Initialize OpenAI client
+        client = AsyncOpenAI(api_key=digest_publisher_settings.openai_api_key)
+
+        # Get posts from the configured time range
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=7)
+        start_date = end_date - timedelta(days=digest_publisher_settings.days_back)
 
         logger.info(f"Fetching posts from {start_date} to {end_date}")
         posts = await RSSPostRepository.get_by_date_range(start_date, end_date)
 
         if not posts:
             logger.info("No recent posts found")
-            print("No posts found in the last 7 days.")
+            print(f"No posts found in the last {digest_publisher_settings.days_back} days.")
             return {"published_count": 0}
 
-        # Create digest
-        digest = create_digest(posts)
+        # Limit posts if there are too many
+        if len(posts) > digest_publisher_settings.max_posts:
+            logger.warning(
+                f"Found {len(posts)} posts, limiting to {digest_publisher_settings.max_posts}"
+            )
+            posts = posts[: digest_publisher_settings.max_posts]
+
+        # Generate AI digest
+        digest = await generate_ai_digest(posts, client)
 
         # Publish to Telegram
         await publish_to_telegram(digest)
 
-        logger.info(f"Successfully published digest with {len(posts)} posts")
+        logger.info(f"Successfully published AI digest with {len(posts)} posts")
 
         return {"published_count": len(posts)}
 
+    except ValueError as e:
+        # Handle configuration errors
+        logger.error(f"Configuration error: {e}")
+        print(f"Configuration error: {e}")
+        print("Please check OPENAI_API_KEY and Telegram settings.")
+        raise
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         print(f"Error: {e}")

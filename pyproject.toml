@@ -32,7 +32,6 @@ packages = [
     "src/common",
     "src/rss_reader",
     "src/event_classifier",
-    "src/summarizer",
     "src/digest_publisher",
     "src/pipeline",
 ]
