@@ -81,23 +81,18 @@ alembic upgrade head
 
 **Run once:**
 ```bash
-python -m src.pipeline
+uv run -m src.pipeline
 ```
 
 **Run on schedule:**
 ```bash
-python -m src.pipeline --schedule --interval 60
+uv run -m src.pipeline --schedule --interval 60
 ```
 
 **Run with Docker:**
 ```bash
 docker-compose up -d
 ```
-
-## 📖 Documentation
-
-- [Pipeline Orchestrator Guide](src/pipeline/README.md)
-- [Architecture Details](AGENTS.md)
 
 ## 🔧 Configuration
 
@@ -113,24 +108,7 @@ Key settings:
 ## 🧪 Testing
 
 ```bash
-pytest tests/
-```
-
-## 📦 Project Structure
-
-```
-event-platform/
-├── src/
-│   ├── common/           # Shared utilities and database models
-│   ├── pipeline/         # Pipeline orchestrator
-│   ├── rss_reader/       # RSS feed fetching agent
-│   ├── event_classifier/ # Event classification agent
-│   ├── summarizer/       # Event summarization agent
-│   └── digest_publisher/ # Telegram publishing agent
-├── alembic/              # Database migrations
-├── tests/                # Test suite
-├── docker-compose.yml    # Docker configuration
-└── pyproject.toml        # Project dependencies
+uv run pytest tests
 ```
 
 ## 🐳 Docker Deployment
@@ -139,17 +117,3 @@ Start all services:
 ```bash
 docker-compose up -d
 ```
-
-View logs:
-```bash
-docker-compose logs -f pipeline
-```
-
-Stop services:
-```bash
-docker-compose down
-```
-
-## 📝 License
-
-MIT
