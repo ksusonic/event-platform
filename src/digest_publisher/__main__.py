@@ -5,8 +5,9 @@ Run with: python -m src.digest_publisher
 
 import asyncio
 import logging
-from typing import List
+from typing import List, Dict
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from telegram import Bot
 from telegram.constants import ParseMode
@@ -24,31 +25,65 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def prepare_posts_for_prompt(posts: List[RSSPost]) -> str:
+def prepare_posts_for_prompt(posts: List[RSSPost], section_title: str = "Posts") -> str:
     """
-    Prepare posts in a format suitable for OpenAI prompt.
+    Prepare posts in a format suitable for OpenAI prompt, grouped by day.
 
     Args:
         posts: List of RSSPost objects
+        section_title: Title for this section of posts
 
     Returns:
-        Formatted string with all posts
+        Formatted string with all posts grouped by day
     """
-    formatted_posts = []
+    if not posts:
+        return ""
 
-    for i, post in enumerate(posts, 1):
-        post_info = [f"\n--- Post {i} ---"]
-
+    # Group posts by date
+    posts_by_date: Dict[str, List[RSSPost]] = defaultdict(list)
+    for post in posts:
         if post.pub_date:
-            post_info.append(f"Date: {post.pub_date.strftime('%Y-%m-%d %H:%M')}")
+            date_key = post.pub_date.strftime("%Y-%m-%d")
+            posts_by_date[date_key].append(post)
+        else:
+            # Posts without date go to "Unknown Date"
+            posts_by_date["Unknown Date"].append(post)
 
-        if post.content:
-            # Truncate very long content
-            content = post.content[:1000] + "..." if len(post.content) > 1000 else post.content
-            post_info.append(f"Content: {content}")
+    # Sort dates in descending order (newest first)
+    sorted_dates = sorted([d for d in posts_by_date.keys() if d != "Unknown Date"], reverse=True)
+    if "Unknown Date" in posts_by_date:
+        sorted_dates.append("Unknown Date")
 
-        post_info.append(f"Source: {post.link}")
-        formatted_posts.append("\n".join(post_info))
+    formatted_posts = [f"\n=== {section_title} ==="]
+
+    post_counter = 1
+    for date_key in sorted_dates:
+        day_posts = posts_by_date[date_key]
+
+        # Add day header
+        if date_key == "Unknown Date":
+            formatted_posts.append(f"\n## {date_key} ({len(day_posts)} posts)")
+        else:
+            # Convert to more readable format
+            date_obj = datetime.strptime(date_key, "%Y-%m-%d")
+            day_name = date_obj.strftime("%A, %B %d, %Y")
+            formatted_posts.append(f"\n## {day_name} ({len(day_posts)} posts)")
+
+        # Add posts for this day
+        for post in day_posts:
+            post_info = [f"\n--- Post {post_counter} ---"]
+
+            if post.pub_date:
+                post_info.append(f"Time: {post.pub_date.strftime('%H:%M')}")
+
+            if post.content:
+                # Truncate very long content
+                content = post.content[:1000] + "..." if len(post.content) > 1000 else post.content
+                post_info.append(f"Content: {content}")
+
+            post_info.append(f"Source: {post.link}")
+            formatted_posts.append("\n".join(post_info))
+            post_counter += 1
 
     return "\n".join(formatted_posts)
 
@@ -69,43 +104,61 @@ async def generate_ai_digest(posts: List[RSSPost], client: AsyncOpenAI) -> str:
 
     logger.info(f"Generating AI digest for {len(posts)} posts...")
 
+    # Get links of current posts to exclude from historical lookup
+    current_post_links = [post.link for post in posts]
+
+    # Fetch previous posts from last 2 days (excluding current posts)
+    logger.info("Fetching previous posts from last 2 days...")
+    previous_posts = await RSSPostRepository.get_recent_posts_excluding(
+        days=2,
+        exclude_links=current_post_links,
+        limit=50,  # Limit to avoid overwhelming the context
+    )
+    logger.info(f"Found {len(previous_posts)} previous posts to include as context")
+
     # Prepare posts for the prompt
-    posts_content = prepare_posts_for_prompt(posts)
+    posts_content = prepare_posts_for_prompt(posts, "CURRENT Posts to Summarize")
+    previous_posts_content = prepare_posts_for_prompt(
+        previous_posts, "PREVIOUS Posts (Already Published - DO NOT REPEAT)"
+    )
 
     # Create the system prompt
-    system_prompt = """You are a helpful assistant that creates engaging news digests for Telegram channels.
+    system_prompt = """Вы — помощник для создания новостных дайджестов в Telegram.
 
-Your task is to:
-1. Analyze all the posts provided
-2. Create a concise, engaging summary that highlights the most important information
-3. Structure it as a Telegram-friendly message with emojis
-4. Keep it informative but readable
-5. Group related topics together
+# Задача
+Создайте интересный и информативный дайджест новостей на русском языке для публикации в Telegram-канале.
 
-Format guidelines:
-- Start with a catchy header
-- Use emojis strategically (📰 🔥 💡 ⚡ 🎯 etc.)
-- Keep paragraphs short
+# Инструкции
+1. Проанализируйте все ТЕКУЩИЕ посты.
+2. Организуйте контент по датам с чёткими заголовками дней (например, "📅 Понедельник, 20 января 2026").
+3. Внутри каждого дня группируйте связанные темы для логичного повествования.
+4. Используйте эмодзи для улучшения восприятия (📰 🔥 💡 ⚡ 🏆 📅).
+5. Пишите кратко и понятно.
 
-CRITICAL FORMATTING RULES:
-- You MUST use HTML tags for formatting
-- Use <b>text</b> for bold (NOT **text**)
-- Use <i>text</i> for italic (NOT *text*)
-- Use <a href="URL">text</a> for links (NOT [text](URL))
-- Use <code>text</code> for code (NOT `text`)
-- DO NOT use Markdown syntax (**, *, _, `, etc.)
-- Only escape &, <, > when they appear in regular text (not in tags)
+# ВАЖНО: Анти-дублирование
+- Вам предоставлены ПРЕДЫДУЩИЕ посты — они УЖЕ были опубликованы.
+- НЕ включайте и НЕ упоминайте предыдущие посты в дайджесте.
+- Создавайте дайджест ТОЛЬКО из раздела "CURRENT Posts to Summarize".
+- Если текущий пост похож на предыдущий, можете кратко упомянуть, что это обновление.
 
-Example of correct formatting:
-<b>Important Header</b>
-This is regular text with an <i>emphasized word</i> and a <a href="https://example.com">link</a>."""
+# Форматирование
+- Используйте только Telegram HTML теги: <b>жирный</b>, <i>курсив</i>, <a href="URL">ссылка</a>
+- Никогда не используйте Markdown (**, *, _, `)
+- Экранируйте &, <, > только в тексте контента (не внутри HTML-тегов)"""
 
     # Create the user prompt
-    user_prompt = f"""Please create an engaging news digest from the following {len(posts)} posts:
-
-{posts_content}
-
-Create a Telegram-friendly digest that readers will find informative and easy to read."""
+    user_prompt_parts = [
+        "Создайте увлекательный новостной дайджест на русском языке из ТЕКУЩИХ постов ниже.",
+        f"\n{previous_posts_content}" if previous_posts else "",
+        f"\n{posts_content}",
+        f"\n\n**ВАЖНО**: Создайте дайджест ТОЛЬКО из {len(posts)} ТЕКУЩИХ постов, перечисленных выше.",
+        f"НЕ включайте и не упоминайте {len(previous_posts)} предыдущих постов — они даны только для контекста."
+        if previous_posts
+        else "",
+        "\n\n**СТРУКТУРА**: Организуйте дайджест по датам с чёткими заголовками дней (например, '📅 Понедельник, 20 января 2026').",
+        "Внутри каждого дня представьте связанные новости вместе в связной форме.",
+    ]
+    user_prompt = "".join(user_prompt_parts)
 
     try:
         # Call OpenAI API
@@ -326,6 +379,11 @@ async def main():
 
         # Publish to Telegram
         await publish_to_telegram(digest)
+
+        # Mark posts as published after successful publication
+        post_links = [post.link for post in posts]
+        updated_count = await RSSPostRepository.mark_as_published(post_links)
+        logger.info(f"Marked {updated_count} posts as published")
 
         logger.info(f"Successfully published AI digest with {len(posts)} posts")
 

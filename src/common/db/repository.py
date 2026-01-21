@@ -141,7 +141,7 @@ class RSSPostRepository:
 
     @staticmethod
     async def get_by_date_range(
-        start_date: datetime, end_date: datetime, limit: int = 1000
+        start_date: datetime, end_date: datetime, limit: int = 1000, only_unpublished: bool = True
     ) -> List[RSSPost]:
         """Get posts within a date range.
 
@@ -149,16 +149,26 @@ class RSSPostRepository:
             start_date: Start date
             end_date: End date
             limit: Maximum number of posts to return
+            only_unpublished: If True, only return unpublished posts
 
         Returns:
             List of RSSPost instances
         """
-        query = """
-            SELECT * FROM rss_posts 
-            WHERE pub_date >= $1 AND pub_date <= $2
-            ORDER BY pub_date DESC 
-            LIMIT $3
-        """
+        if only_unpublished:
+            query = """
+                SELECT * FROM rss_posts 
+                WHERE pub_date >= $1 AND pub_date <= $2
+                AND is_published = false
+                ORDER BY pub_date DESC 
+                LIMIT $3
+            """
+        else:
+            query = """
+                SELECT * FROM rss_posts 
+                WHERE pub_date >= $1 AND pub_date <= $2
+                ORDER BY pub_date DESC 
+                LIMIT $3
+            """
         rows = await db.fetch(query, start_date, end_date, limit)
         return [RSSPost.from_row(row) for row in rows]
 
@@ -189,3 +199,50 @@ class RSSPostRepository:
         query = "SELECT 1 FROM rss_posts WHERE link = $1 LIMIT 1"
         result = await db.fetchval(query, link)
         return result is not None
+
+    @staticmethod
+    async def get_recent_posts_excluding(
+        days: int, exclude_links: List[str], limit: int = 1000
+    ) -> List[RSSPost]:
+        """Get posts from the last N days, excluding specified links.
+        Only returns published posts to show as context.
+
+        Args:
+            days: Number of days to look back
+            exclude_links: List of post links to exclude
+            limit: Maximum number of posts to return
+
+        Returns:
+            List of RSSPost instances
+        """
+        query = f"""
+            SELECT * FROM rss_posts 
+            WHERE pub_date >= NOW() - INTERVAL '{days} days'
+            AND link != ALL($1)
+            AND is_published = true
+            ORDER BY pub_date DESC 
+            LIMIT $2
+        """
+        rows = await db.fetch(query, exclude_links or [], limit)
+        return [RSSPost.from_row(row) for row in rows]
+
+    @staticmethod
+    async def mark_as_published(links: List[str]) -> int:
+        """Mark posts as published.
+
+        Args:
+            links: List of post links to mark as published
+
+        Returns:
+            Number of posts updated
+        """
+        query = """
+            UPDATE rss_posts
+            SET is_published = true,
+                published_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE link = ANY($1)
+        """
+        result = await db.execute(query, links)
+        # Extract number of rows updated from result string like "UPDATE 5"
+        return int(result.split()[-1]) if result else 0
