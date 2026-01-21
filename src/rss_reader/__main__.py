@@ -6,7 +6,6 @@ Run with: python -m src.rss_reader
 import asyncio
 import logging
 import json
-import sys
 from typing import Tuple
 
 from common.db.session import db

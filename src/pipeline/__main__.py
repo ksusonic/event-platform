@@ -10,7 +10,6 @@ import asyncio
 import argparse
 import sys
 import logging
-from typing import Optional
 
 from .orchestrator import PipelineOrchestrator
 from .config import PipelineConfig

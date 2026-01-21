@@ -9,8 +9,8 @@ from typing import List
 from datetime import datetime, timedelta
 
 from common.db.session import db
-from common.db.repository import EventRepository
-from common.db.models import Event
+from common.db.repository import RSSPostRepository
+from common.db.models import RSSPost
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -18,59 +18,60 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def format_event_for_telegram(event: Event) -> str:
+def format_post_for_telegram(post: RSSPost) -> str:
     """
-    Format an event for Telegram message.
+    Format a post for Telegram message.
 
     Args:
-        event: Event object
+        post: RSSPost object
 
     Returns:
         Formatted string for Telegram
     """
     lines = []
-    lines.append(f"📅 **{event.title}**")
 
-    if event.event_date:
-        lines.append(f"🕐 {event.event_date.strftime('%Y-%m-%d %H:%M')}")
+    # Extract title from link or use first line of content
+    title = post.link.split("/")[-1].replace("-", " ").replace("_", " ")[:100]
+    if len(title) < 10 and post.content:
+        title = post.content.split("\n")[0][:100]
 
-    if event.location:
-        lines.append(f"📍 {event.location}")
+    lines.append(f"📰 **{title}**")
 
-    if event.description:
-        # Truncate long descriptions for Telegram
-        desc = (
-            event.description[:300] + "..." if len(event.description) > 300 else event.description
-        )
-        lines.append(f"\n{desc}")
+    if post.pub_date:
+        lines.append(f"🕐 {post.pub_date.strftime('%Y-%m-%d %H:%M')}")
 
-    lines.append(f"\n🔗 [Source]({event.link})")
+    if post.content:
+        # Truncate long content for Telegram
+        content = post.content[:300] + "..." if len(post.content) > 300 else post.content
+        lines.append(f"\n{content}")
+
+    lines.append(f"\n🔗 [Read more]({post.link})")
 
     return "\n".join(lines)
 
 
-def create_digest(events: List[Event]) -> str:
+def create_digest(posts: List[RSSPost]) -> str:
     """
-    Create a digest message from events.
+    Create a digest message from posts.
 
     Args:
-        events: List of Event objects
+        posts: List of RSSPost objects
 
     Returns:
         Formatted digest string
     """
-    if not events:
-        return "No events found for this period."
+    if not posts:
+        return "No posts found for this period."
 
     lines = []
-    lines.append("🎉 **Event Digest**")
-    lines.append(f"Found {len(events)} upcoming events\n")
+    lines.append("📣 **News Digest**")
+    lines.append(f"Found {len(posts)} recent posts\n")
     lines.append("=" * 40)
     lines.append("")
 
-    for i, event in enumerate(events, 1):
-        lines.append(format_event_for_telegram(event))
-        if i < len(events):
+    for i, post in enumerate(posts, 1):
+        lines.append(format_post_for_telegram(post))
+        if i < len(posts):
             lines.append("\n" + "-" * 40 + "\n")
 
     return "\n".join(lines)
@@ -107,27 +108,27 @@ async def main():
             await db.connect()
             logger.info("Connected to database")
 
-        # Get events from the next 7 days
-        start_date = datetime.now()
-        end_date = start_date + timedelta(days=7)
+        # Get posts from the last 7 days
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=7)
 
-        logger.info(f"Fetching events from {start_date} to {end_date}")
-        events = await EventRepository.get_by_date_range(start_date, end_date)
+        logger.info(f"Fetching posts from {start_date} to {end_date}")
+        posts = await RSSPostRepository.get_by_date_range(start_date, end_date)
 
-        if not events:
-            logger.info("No upcoming events found")
-            print("No upcoming events in the next 7 days.")
-            return
+        if not posts:
+            logger.info("No recent posts found")
+            print("No posts found in the last 7 days.")
+            return {"published_count": 0}
 
         # Create digest
-        digest = create_digest(events)
+        digest = create_digest(posts)
 
         # Publish to Telegram
         await publish_to_telegram(digest)
 
-        logger.info(f"Successfully published digest with {len(events)} events")
+        logger.info(f"Successfully published digest with {len(posts)} posts")
 
-        return {"published_count": len(events)}
+        return {"published_count": len(posts)}
 
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
