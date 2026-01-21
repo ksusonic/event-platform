@@ -71,7 +71,7 @@ async def test_logging():
         # Test 5: Get statistics
         print("5. Getting statistics...")
         stats = await OpenAIRequestLogRepository.get_stats()
-        print(f"✓ Stats:")
+        print("✓ Stats:")
         print(f"  Total: {stats['total']}")
         print(f"  Completed: {stats['completed']}")
         print(f"  Failed: {stats['failed']}")

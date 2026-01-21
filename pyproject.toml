@@ -11,6 +11,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "python-dotenv>=1.0.0",
     "openai>=2.15.0",
+    "python-telegram-bot>=21.0",
 ]
 
 [dependency-groups]
@@ -31,7 +32,6 @@ packages = [
     "src/common",
     "src/rss_reader",
     "src/event_classifier",
-    "src/summarizer",
     "src/digest_publisher",
     "src/pipeline",
 ]

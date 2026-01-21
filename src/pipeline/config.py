@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -15,8 +14,6 @@ class PipelineConfig:
 
     # Agent timeouts (in seconds)
     rss_reader_timeout: int = int(os.getenv("RSS_READER_TIMEOUT", "300"))
-    event_classifier_timeout: int = int(os.getenv("EVENT_CLASSIFIER_TIMEOUT", "600"))
-    summarizer_timeout: int = int(os.getenv("SUMMARIZER_TIMEOUT", "180"))
     digest_publisher_timeout: int = int(os.getenv("DIGEST_PUBLISHER_TIMEOUT", "120"))
 
     # Retry settings
@@ -25,8 +22,6 @@ class PipelineConfig:
 
     # Agent control
     skip_rss_reader: bool = os.getenv("SKIP_RSS_READER", "false").lower() == "true"
-    skip_event_classifier: bool = os.getenv("SKIP_EVENT_CLASSIFIER", "false").lower() == "true"
-    skip_summarizer: bool = os.getenv("SKIP_SUMMARIZER", "false").lower() == "true"
     skip_digest_publisher: bool = os.getenv("SKIP_DIGEST_PUBLISHER", "false").lower() == "true"
 
     # Logging

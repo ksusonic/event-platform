@@ -10,7 +10,6 @@ import asyncio
 import argparse
 import sys
 import logging
-from typing import Optional
 
 from .orchestrator import PipelineOrchestrator
 from .config import PipelineConfig
@@ -37,21 +36,38 @@ Examples:
 
   # Set log level
   python -m src.pipeline --log-level DEBUG
+  
+  # With all options
+  python -m src.pipeline --schedule --interval 30 --max-retries 5 --log-level DEBUG
 
 Environment Variables:
+  # Pipeline Control
   PIPELINE_INTERVAL_MINUTES     Interval between runs (default: 60)
   PIPELINE_SCHEDULE_ENABLED     Enable scheduled runs (default: false)
-  RSS_READER_TIMEOUT           RSS Reader timeout in seconds (default: 300)
-  EVENT_CLASSIFIER_TIMEOUT     Event Classifier timeout (default: 600)
+  PIPELINE_MAX_RETRIES         Max retry attempts (default: 3)
+  PIPELINE_RETRY_DELAY         Delay between retries in seconds (default: 30)
+  PIPELINE_LOG_LEVEL           Log level (default: INFO)
+  
+  # Agent Timeouts (seconds)
+  RSS_READER_TIMEOUT           RSS Reader timeout (default: 300)
   SUMMARIZER_TIMEOUT           Summarizer timeout (default: 180)
   DIGEST_PUBLISHER_TIMEOUT     Digest Publisher timeout (default: 120)
-  PIPELINE_MAX_RETRIES         Max retry attempts (default: 3)
-  PIPELINE_RETRY_DELAY         Delay between retries (default: 30)
+  
+  # Agent Control
   SKIP_RSS_READER              Skip RSS Reader (default: false)
-  SKIP_EVENT_CLASSIFIER        Skip Event Classifier (default: false)
   SKIP_SUMMARIZER              Skip Summarizer (default: false)
   SKIP_DIGEST_PUBLISHER        Skip Digest Publisher (default: false)
-  PIPELINE_LOG_LEVEL           Log level (default: INFO)
+  
+  # Database
+  DB_POOL_SIZE                 Database connection pool size (default: 10)
+  DB_MAX_OVERFLOW              Max database overflow connections (default: 20)
+  
+  # Telegram (for Digest Publisher)
+  TELEGRAM_BOT_TOKEN           Telegram bot token (required for publishing)
+  TELEGRAM_CHAT_ID             Telegram chat/channel ID (required for publishing)
+  DIGEST_DAYS                  Number of days for digest (default: 7)
+  MAX_POSTS_PER_DIGEST         Max posts per digest (default: 20)
+  TRUNCATE_CONTENT_LENGTH      Content truncation length (default: 300)
         """,
     )
 
@@ -72,12 +88,6 @@ Environment Variables:
         "--skip-rss-reader",
         action="store_true",
         help="Skip RSS Reader agent",
-    )
-
-    parser.add_argument(
-        "--skip-event-classifier",
-        action="store_true",
-        help="Skip Event Classifier agent",
     )
 
     parser.add_argument(
@@ -128,9 +138,6 @@ def create_config(args) -> PipelineConfig:
 
     if args.skip_rss_reader:
         config.skip_rss_reader = True
-
-    if args.skip_event_classifier:
-        config.skip_event_classifier = True
 
     if args.skip_summarizer:
         config.skip_summarizer = True

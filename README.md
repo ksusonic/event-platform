@@ -98,13 +98,6 @@ docker-compose up -d
 
 See [`.env.example`](.env.example) for all configuration options.
 
-Key settings:
-- `PIPELINE_INTERVAL_MINUTES`: How often to run (default: 60)
-- `RSS_READER_TIMEOUT`: RSS Reader timeout in seconds (default: 300)
-- `EVENT_CLASSIFIER_TIMEOUT`: Classifier timeout (default: 600)
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
-
 ## 🧪 Testing
 
 ```bash

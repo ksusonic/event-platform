@@ -136,22 +136,6 @@ class PipelineOrchestrator:
             result = await rss_reader_main()
             return {"posts_saved": result.get("saved_count", 0)} if result else {}
 
-    async def _run_event_classifier(self) -> Dict[str, Any]:
-        """Run the Event Classifier agent."""
-        from event_classifier.worker import main as classifier_main
-
-        async with asyncio.timeout(self.config.event_classifier_timeout):
-            result = await classifier_main()
-            return {"posts_classified": result.get("classified_count", 0)} if result else {}
-
-    async def _run_summarizer(self) -> Dict[str, Any]:
-        """Run the Summarizer agent."""
-        from summarizer.__main__ import main as summarizer_main
-
-        async with asyncio.timeout(self.config.summarizer_timeout):
-            result = await summarizer_main()
-            return {"events_summarized": result.get("event_count", 0)} if result else {}
-
     async def _run_digest_publisher(self) -> Dict[str, Any]:
         """Run the Digest Publisher agent."""
         from digest_publisher.__main__ import main as publisher_main
@@ -191,25 +175,7 @@ class PipelineOrchestrator:
             self.logger.error("⛔ RSSReader failed - stopping pipeline")
             return self.results
 
-        # Agent 2: Event Classifier
-        result = await self._run_agent_with_retry(
-            "EventClassifier", self._run_event_classifier, self.config.skip_event_classifier
-        )
-        self.results.append(result)
-
-        if result.status == AgentStatus.FAILED:
-            self.logger.warning("⚠️  EventClassifier failed - continuing with remaining agents")
-
-        # Agent 3: Summarizer
-        result = await self._run_agent_with_retry(
-            "Summarizer", self._run_summarizer, self.config.skip_summarizer
-        )
-        self.results.append(result)
-
-        if result.status == AgentStatus.FAILED:
-            self.logger.warning("⚠️  Summarizer failed - continuing with remaining agents")
-
-        # Agent 4: Digest Publisher
+        # Agent 2: Digest Publisher
         result = await self._run_agent_with_retry(
             "DigestPublisher", self._run_digest_publisher, self.config.skip_digest_publisher
         )
